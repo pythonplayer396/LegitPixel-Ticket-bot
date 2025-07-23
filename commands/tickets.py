@@ -9,11 +9,19 @@ from typing import Optional
 logger = logging.getLogger('discord')
 
 class FeedbackModal(discord.ui.Modal):
-    def __init__(self, ticket_name: str, guild: discord.Guild, rating: int):
-        super().__init__(title="Ticket Feedback")
+    def __init__(self, ticket_name: str, guild: discord.Guild):
+        super().__init__(title="Ticket Feedback & Rating")
         self.ticket_name = ticket_name
         self.guild = guild
-        self.rating = rating
+
+        self.rating = discord.ui.TextInput(
+            label="Rate your support experience (1-5 stars)",
+            style=discord.TextStyle.short,
+            placeholder="Enter a number from 1 to 5",
+            required=True,
+            min_length=1,
+            max_length=1
+        )
 
         self.feedback = discord.ui.TextInput(
             label="How was your ticket support experience?",
@@ -31,6 +39,7 @@ class FeedbackModal(discord.ui.Modal):
             max_length=1000
         )
 
+        self.add_item(self.rating)
         self.add_item(self.feedback)
         self.add_item(self.suggestions)
 
@@ -38,7 +47,23 @@ class FeedbackModal(discord.ui.Modal):
         try:
             logger.info(f"[DEBUG] Processing feedback submission for ticket {self.ticket_name}")
 
-            ticket_number = self.ticket_name.split('-')[-1]  # Extract ticket number from channel name
+            # Validate rating input
+            try:
+                rating_value = int(self.rating.value)
+                if rating_value < 1 or rating_value > 5:
+                    raise ValueError("Rating must be between 1 and 5")
+            except ValueError:
+                await interaction.response.send_message(
+                    embed=discord.Embed(
+                        title="❌ Invalid Rating",
+                        description="Please enter a valid rating between 1 and 5.",
+                        color=discord.Color.red()
+                    ),
+                    ephemeral=True
+                )
+                return
+
+            ticket_number = self.ticket_name if not self.ticket_name.startswith("ticket-") else self.ticket_name.split('-')[-1]
             feedback_channel = discord.utils.get(self.guild.channels, name="feedback-logs")
             if not feedback_channel:
                 await interaction.response.send_message("Feedback channel not found.", ephemeral=True)
@@ -48,7 +73,7 @@ class FeedbackModal(discord.ui.Modal):
             stored = storage.store_feedback(
                 ticket_name=ticket_number,
                 user_id=str(interaction.user.id),
-                rating=self.rating,
+                rating=rating_value,
                 feedback=self.feedback.value,
                 suggestions=self.suggestions.value
             )
@@ -64,7 +89,7 @@ class FeedbackModal(discord.ui.Modal):
             feedback_embed = responses.feedback_embed(
                 ticket_name=ticket_number,
                 user=interaction.user,
-                rating=self.rating,
+                rating=rating_value,
                 feedback=self.feedback.value,
                 suggestions=self.suggestions.value,
                 claimed_by=claimed_by,
@@ -163,38 +188,21 @@ class CloseReasonModal(discord.ui.Modal):
                 ephemeral=True
             )
 
-class StarRatingButton(discord.ui.Button):
-    def __init__(self, rating: int):
+class FeedbackButton(discord.ui.Button):
+    def __init__(self, ticket_number: str):
         super().__init__(
-            style=discord.ButtonStyle.gray,
-            label="⭐" * rating,
-            custom_id=f"rating_{rating}"
+            style=discord.ButtonStyle.green,
+            label="✨ Rate & Give Feedback",
+            custom_id=f"feedback_{ticket_number}"
         )
-        self.rating = rating
+        self.ticket_number = ticket_number
 
     async def callback(self, interaction: discord.Interaction):
         try:
-            channel_name = interaction.channel.name
-            logger.info(f"[DEBUG] Processing star rating {self.rating} for channel {channel_name}")
-
-            # Extract ticket number for feedback check
-            ticket_number = channel_name.split('-')[-1]
-            username = channel_name.split('-')[1]
-
-            # Check if user is ticket creator
-            if interaction.user.name != username:
-                await interaction.response.send_message(
-                    embed=discord.Embed(
-                        title="❌ Permission Denied",
-                        description="Only the ticket creator can provide feedback.",
-                        color=discord.Color.red()
-                    ),
-                    ephemeral=True
-                )
-                return
+            logger.info(f"[DEBUG] Opening feedback modal for ticket {self.ticket_number}")
 
             # Check if feedback already exists
-            existing_feedback = storage.get_feedback(ticket_number)
+            existing_feedback = storage.get_feedback(self.ticket_number)
             if existing_feedback:
                 await interaction.response.send_message(
                     embed=discord.Embed(
@@ -207,19 +215,18 @@ class StarRatingButton(discord.ui.Button):
                 return
 
             modal = FeedbackModal(
-                ticket_name=channel_name,
-                guild=interaction.guild,
-                rating=self.rating
+                ticket_name=self.ticket_number,
+                guild=interaction.guild
             )
             await interaction.response.send_modal(modal)
-            logger.info(f"[DEBUG] Opened feedback modal for ticket {ticket_number} with rating {self.rating}")
+            logger.info(f"[DEBUG] Opened feedback modal for ticket {self.ticket_number}")
 
         except Exception as e:
-            logger.error(f"[DEBUG] Error processing star rating: {str(e)}")
+            logger.error(f"[DEBUG] Error opening feedback modal: {str(e)}")
             await interaction.response.send_message(
                 embed=discord.Embed(
                     title="❌ Error",
-                    description="An error occurred while processing your rating. Please try again.",
+                    description="An error occurred while opening feedback form. Please try again.",
                     color=discord.Color.red()
                 ),
                 ephemeral=True
@@ -389,7 +396,15 @@ class TicketCommands(commands.Cog):
             self.user = user
             self.claimed_by = None
             self.message: Optional[discord.Message] = None
+            
+            # Button will always be enabled and check cooldown when clicked
+            
             logger.info(f"Initializing TicketControls for ticket {ticket_number}")
+        
+        def _update_call_help_button_state(self):
+            """Update the call for help button state based on cooldown"""
+            # Keep button always enabled - cooldown check will be done when clicked
+            pass
 
         async def on_timeout(self) -> None:  # Add return type annotation
             try:
@@ -429,14 +444,64 @@ class TicketCommands(commands.Cog):
                     time_difference = datetime.datetime.utcnow() - last_called
                     if time_difference < datetime.timedelta(hours=2):
                         remaining_time = datetime.timedelta(hours=2) - time_difference
-                        minutes, seconds = divmod(remaining_time.seconds, 60)
-                        hours, minutes = divmod(minutes, 60)
+                        total_seconds = remaining_time.total_seconds()
+                        hours = int(total_seconds // 3600)
+                        minutes = int((total_seconds % 3600) // 60)
+                        seconds = int(total_seconds % 60)
+                        
+                        # Create initial countdown message with live timer
+                        countdown_message_text = (
+                            f"❌ **You cannot call Staff yet.**\n"
+                            f"This button will be available in **{hours:02d}:{minutes:02d}:{seconds:02d}** hours.\n"
+                            f"*This timer updates in real-time*"
+                        )
+                        
                         await interaction.response.send_message(
-                            f"You can only call for help every 2 hours. Please wait {hours} hours, {minutes} minutes, and {seconds} seconds.",
+                            countdown_message_text,
                             ephemeral=True
                         )
+                        
+                        # Create a live updating timer
+                        countdown_message = await interaction.original_response()
+                        
+                        # Update the timer every second for accuracy
+                        while total_seconds > 0:
+                            await asyncio.sleep(1)  # Wait 1 second
+                            
+                            # Recalculate remaining time
+                            current_time = datetime.datetime.utcnow()
+                            time_difference = current_time - last_called
+                            if time_difference >= datetime.timedelta(hours=2):
+                                # Cooldown is over
+                                final_message = "✅ **Cooldown Complete**\nYou can now use the Call for Help button again!"
+                                try:
+                                    await countdown_message.edit(content=final_message)
+                                except:
+                                    pass  # Message might be deleted or expired
+                                break
+                            
+                            remaining_time = datetime.timedelta(hours=2) - time_difference
+                            total_seconds = remaining_time.total_seconds()
+                            hours = int(total_seconds // 3600)
+                            minutes = int((total_seconds % 3600) // 60)
+                            seconds = int(total_seconds % 60)
+                            
+                            # Update the message with real-time countdown
+                            updated_message_text = (
+                                f"❌ **You cannot call Staff yet.**\n"
+                                f"This button will be available in **{hours:02d}:{minutes:02d}:{seconds:02d}** hours.\n"
+                            )
+                            
+                            # Only update the message every 5 seconds to avoid rate limits
+                            if int(total_seconds) % 5 == 0 or total_seconds <= 10:
+                                try:
+                                    await countdown_message.edit(content=updated_message_text)
+                                except:
+                                    break  # Stop updating if message is no longer available
+                        
                         return
 
+                # If no cooldown, proceed with calling for help
                 staff_role = discord.utils.get(interaction.guild.roles, name="Staff")
                 if staff_role:
                     ping_embed = discord.Embed(
@@ -446,13 +511,17 @@ class TicketCommands(commands.Cog):
                     )
                     await interaction.channel.send(content=f"{staff_role.mention}", embed=ping_embed)
                     
-                    # Disable the button after use
-                    button.disabled = True
                     await interaction.response.edit_message(view=self)
                     
-                    await interaction.followup.send("Staff has been notified!", ephemeral=True)
+                    success_embed = discord.Embed(
+                        title="✅ Staff Notified",
+                        description="Staff has been notified and will assist you shortly!",
+                        color=discord.Color.green()
+                    )
+                    await interaction.followup.send(embed=success_embed, ephemeral=True)
 
                     # Store the time the user called for help
+                    import datetime
                     storage.store_last_call_for_help(self.ticket_number, datetime.datetime.utcnow())
 
             except Exception as e:
@@ -672,7 +741,7 @@ class TicketCommands(commands.Cog):
         async def send_feedback_request(self, closer: discord.User):
             try:
                 feedback_embed = discord.Embed(
-                    title="How do you rate our help?",
+                    title="Rate & Give Feedback",
                     description=(
                         f"{self.user.mention}, recently you were contacting Staff by creating a ticket with "
                         f"ID {self.ticket_number} on LegitPixel Support Server. How would you rate the help of {closer.mention}?\n\n"
@@ -683,10 +752,9 @@ class TicketCommands(commands.Cog):
                 )
                 feedback_embed.set_thumbnail(url=self.user.display_avatar.url)
 
-                # Create rating buttons
+                # Create single feedback button
                 feedback_view = discord.ui.View(timeout=86400)  # 24 hours
-                for i in range(1, 6):
-                    feedback_view.add_item(StarRatingButton(i))
+                feedback_view.add_item(FeedbackButton(self.ticket_number))
 
                 # Send DM to user
                 try:
@@ -712,10 +780,9 @@ class TicketCommands(commands.Cog):
                 )
                 feedback_embed.set_thumbnail(url=creator.display_avatar.url)
 
-                # Create rating buttons
+                # Create single feedback button
                 feedback_view = discord.ui.View(timeout=86400)  # 24 hours
-                for i in range(1, 6):
-                    feedback_view.add_item(StarRatingButton(i))
+                feedback_view.add_item(FeedbackButton(self.ticket_number))
 
                 # Send DM to user
                 try:

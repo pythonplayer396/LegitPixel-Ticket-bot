@@ -11,7 +11,7 @@ staff_confirmation_message = "We recommend to wait for 24 hours after creating t
 custom_messages = {}  # Store custom messages per category
 claimed_tickets = {}  # Store claimed ticket information
 tickets: Dict[str, Dict[str, Any]] = {}  # Store ticket information
-ticket_counter = 10000  # Starting ticket number
+ticket_counter = 1  # Starting ticket number
 feedback_storage = {}  # Store feedback information
 ticket_logs = {}  # Store ticket logs
 
@@ -26,7 +26,7 @@ def get_next_ticket_number() -> str:
             ticket_counter = max(ticket_counter, max_ticket + 1)
         else:
             # If no tickets exist, start from initial counter
-            ticket_counter = max(ticket_counter, 10000)
+            ticket_counter = max(ticket_counter, 1)
 
         logger.info(f"Generated sequential ticket number: {ticket_counter}")
         return str(ticket_counter)
@@ -287,7 +287,51 @@ def get_user_ticket_history(user_id: str) -> list:
 
 # utils/storage.py
 
-def get_last_call_for_help():
-    # Logic to retrieve the last call for help
-    # Example return statement
-    return "Last help call details"
+def get_last_call_for_help(ticket_number: str):
+    """Get the last time user called for help for a specific ticket"""
+    try:
+        import json
+        import os
+        from datetime import datetime
+        
+        help_calls_file = "data/help_calls.json"
+        if os.path.exists(help_calls_file):
+            with open(help_calls_file, 'r') as f:
+                help_calls = json.load(f)
+                if ticket_number in help_calls:
+                    # Convert string back to datetime
+                    return datetime.fromisoformat(help_calls[ticket_number])
+        return None
+    except Exception as e:
+        logger.error(f"Error getting last call for help: {e}")
+        return None
+
+def store_last_call_for_help(ticket_number: str, timestamp):
+    """Store the timestamp when user called for help"""
+    try:
+        import json
+        import os
+        
+        help_calls_file = "data/help_calls.json"
+        help_calls = {}
+        
+        # Load existing data
+        if os.path.exists(help_calls_file):
+            with open(help_calls_file, 'r') as f:
+                help_calls = json.load(f)
+        
+        # Store new timestamp (convert datetime to string for JSON serialization)
+        help_calls[ticket_number] = timestamp.isoformat()
+        
+        # Ensure data directory exists
+        os.makedirs("data", exist_ok=True)
+        
+        # Save updated data
+        with open(help_calls_file, 'w') as f:
+            json.dump(help_calls, f, indent=2)
+            
+        logger.info(f"Stored call for help timestamp for ticket {ticket_number}")
+        return True
+    except Exception as e:
+        logger.error(f"Error storing call for help timestamp: {e}")
+        return False

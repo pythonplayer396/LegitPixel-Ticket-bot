@@ -89,7 +89,7 @@ async def on_command_error(ctx, error):
 
 # Run the bot
 try:
-    bot.run("MTMyMDk5OTcwNTg4NjQ2MjA2NA.GfPqgu.YisQUEDy4NSi1uklhwvlVD_vj_vusaVfNMw6lE")
+    bot.run("MTMyMDk5OTcwNTg4NjQ2MjA2NA.Gdwopr.zOOwicWf97B8CgtxUbOQd55QJWhstGZAz48HOs")
 
 except discord.errors.LoginFailure as e:
     logger.error(f"Discord login failure: {e}")

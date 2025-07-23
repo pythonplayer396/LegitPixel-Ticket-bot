@@ -1,0 +1,10 @@
+Ticket 2 Transcript
+Created by: Snapy (1351461013622493195)
+Closed by: Suhaan (1259498776046076059)
+Closing reason: Manual closure by staff
+Created at: 2025-07-23 11:14:22.521000+00:00
+Closed at: 2025-07-23 11:20:15.673000+00:00
+==================================================
+
+[2025-07-23 11:14:23] example: [Embed/File]
+[2025-07-23 11:14:30] example: <@&1393454551624974418>
