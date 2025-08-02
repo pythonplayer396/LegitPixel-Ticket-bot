@@ -174,6 +174,110 @@ class AdminCommands(commands.Cog):
             logger.error(f"Error setting confirmation message: {e}")
             await interaction.response.send_message("An error occurred while updating the confirmation message.", ephemeral=True)
 
+    @app_commands.command(name="licence", description="Display bot license and ownership information")
+    async def licence_command(self, interaction: discord.Interaction):
+        """Display bot license information"""
+        try:
+            license_embed = discord.Embed(
+                title="📜 Bot License & Ownership",
+                description=(
+                    "📜 This bot is a custom-built system created by <@&1401235304982040596>.\n\n"
+                    "🔧 Made exclusively for the FakePixel Giveaways community.\n"
+                    "It is not for public use, resale, replication, or redistribution.\n\n"
+                    "This bot is a custom-built automation system developed by **Darkwall**, made exclusively for use within the **FakePixel Giveaways** community.\n\n"
+                    "This software is not intended for public distribution or external deployment.\n\n"
+                    "🛑 **Not Permitted:**\n"
+                    "• Copying, mimicking, or replicating bot features or commands\n"
+                    "• Reverse-engineering or extracting any internal logic\n"
+                    "• Using bot output for AI training, cloning, or automation\n"
+                    "• Inviting this bot to third-party servers without written permission\n"
+                    "• Redistributing, reselling, or modifying the software\n\n"
+                    "✅ **License & Rights:**\n"
+                    "This software is protected under a **proprietary commercial license**, secured via **CertSecure™ Software Licensing Services**.\n"
+                    "All rights reserved © 2025 **Darkwall**.\n"
+                    "Unauthorized use will result in takedowns and legal enforcement.\n\n"
+                    "📩 **Contact:**\n"
+                    "For permissions or licensing inquiries, contact **Darkwall** or the FakePixel Giveaways staff team."
+                ),
+                color=discord.Color.from_rgb(220, 20, 60)
+            )
+            
+            await interaction.response.send_message(embed=license_embed, ephemeral=True)
+            logger.info(f"License command used by {interaction.user.name}")
+            
+        except Exception as e:
+            logger.error(f"Error in license command: {e}")
+            await interaction.response.send_message("An error occurred while displaying license information.", ephemeral=True)
+
+    @app_commands.command(name="carried", description="Log completed carries for staff approval")
+    @app_commands.describe(
+        staff="The staff member who completed the carries",
+        number_of_runs="Number of runs completed",
+        carry_type="Type of carry (dungeon or slayer)",
+        floor_or_tier="Floor (f1-f7, m1-m7, entrance) or tier (t2-t4)",
+        grade="Grade achieved (s or s+)"
+    )
+    async def carried(
+        self,
+        interaction: discord.Interaction,
+        staff: discord.Member,
+        number_of_runs: int,
+        carry_type: str,
+        floor_or_tier: str,
+        grade: str
+    ):
+        """Log completed carries for approval"""
+        try:
+            carry_system = self.bot.get_cog('CarrySystem')
+            if carry_system:
+                await carry_system.carried(interaction, staff, number_of_runs, carry_type, floor_or_tier, grade)
+            else:
+                await interaction.response.send_message("Carry system not available.", ephemeral=True)
+        except Exception as e:
+            logger.error(f"Error in carried command: {e}")
+            await interaction.response.send_message("An error occurred while processing the carry request.", ephemeral=True)
+
+    @app_commands.command(name="points", description="View total approved points for a staff member")
+    @app_commands.describe(staff="The staff member to check points for")
+    async def points(self, interaction: discord.Interaction, staff: discord.Member):
+        """View total points for a staff member"""
+        try:
+            carry_system = self.bot.get_cog('CarrySystem')
+            if carry_system:
+                await carry_system.points(interaction, staff)
+            else:
+                await interaction.response.send_message("Carry system not available.", ephemeral=True)
+        except Exception as e:
+            logger.error(f"Error in points command: {e}")
+            await interaction.response.send_message("An error occurred while retrieving points.", ephemeral=True)
+
+    @app_commands.command(name="leaderboard", description="View top staff members by carry points")
+    async def leaderboard(self, interaction: discord.Interaction):
+        """Display carry points leaderboard"""
+        try:
+            carry_system = self.bot.get_cog('CarrySystem')
+            if carry_system:
+                await carry_system.leaderboard(interaction)
+            else:
+                await interaction.response.send_message("Carry system not available.", ephemeral=True)
+        except Exception as e:
+            logger.error(f"Error in leaderboard command: {e}")
+            await interaction.response.send_message("An error occurred while retrieving the leaderboard.", ephemeral=True)
+
+    @app_commands.command(name="pending_carries", description="View pending carry approvals")
+    @app_commands.checks.has_any_role("Manager", "Admin")
+    async def pending_carries(self, interaction: discord.Interaction):
+        """View all pending carry approvals"""
+        try:
+            carry_system = self.bot.get_cog('CarrySystem')
+            if carry_system:
+                await carry_system.pending_carries(interaction)
+            else:
+                await interaction.response.send_message("Carry system not available.", ephemeral=True)
+        except Exception as e:
+            logger.error(f"Error in pending_carries command: {e}")
+            await interaction.response.send_message("An error occurred while retrieving pending carries.", ephemeral=True)
+
     async def cog_load(self):
         pass  # Persistent views are handled automatically by discord.py
 

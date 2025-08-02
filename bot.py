@@ -2,7 +2,7 @@ import discord
 from discord.ext import commands
 import os
 import logging
-from commands import admin, tickets
+from commands import admin, tickets, carry_system
 from utils import permissions, storage, responses
 
 # Set up logging
@@ -23,15 +23,26 @@ async def setup_commands():
         # Create instances of command cogs
         admin_commands = admin.AdminCommands(bot)
         ticket_commands = tickets.TicketCommands(bot)
+        carry_commands = carry_system.CarrySystem(bot)
 
         # Add cogs to bot
         await bot.add_cog(admin_commands)
         await bot.add_cog(ticket_commands)
+        await bot.add_cog(carry_commands)
 
         # Sync command tree
-        await bot.tree.sync()
-
-        logger.info("Commands registered and synced successfully")
+        synced = await bot.tree.sync()
+        
+        logger.info(f"Commands registered and synced successfully: {len(synced)} commands")
+        for command in synced:
+            logger.info(f"Synced command: {command.name}")
+        
+        # Verify licence command is available
+        licence_cmd = bot.tree.get_command('licence')
+        if licence_cmd:
+            logger.info("✅ /licence command is registered and available to all users")
+        else:
+            logger.error("❌ /licence command not found in command tree")
     except Exception as e:
         logger.error(f"Error setting up commands: {e}")
         raise  # Re-raise to ensure we catch setup failures
@@ -67,6 +78,17 @@ async def on_ready():
             from commands.admin import PersistentTicketView
             bot.add_view(PersistentTicketView(bot))
             logger.info("Registered persistent setup menu view")
+        
+        carry_commands = bot.get_cog('CarrySystem')
+        if carry_commands:
+            # Register persistent views for carry approval buttons
+            from commands.carry_system import CarryApprovalView
+            # Load any pending carries and re-register their views
+            pending_data = carry_commands.load_pending()
+            for carry_id in pending_data.keys():
+                view = CarryApprovalView(carry_id, carry_commands)
+                bot.add_view(view)
+            logger.info(f"Registered {len(pending_data)} persistent carry approval views")
             
     except Exception as e:
         logger.error(f"Error during startup: {e}")
@@ -89,9 +111,10 @@ async def on_command_error(ctx, error):
 
 # Run the bot
 try:
-    bot.run("MTQwMTEyNjY5MzgyOTA4NzMwOA.G6ilZL.EuGDJJxVJjA54hPzWinZb2DvPiEUZWtldbTz0M")
+    bot.run("MTQwMTI2Mjg2OTc1MjA1Nzk2Ng.GEl0EY.veY5zjt3fdxDJomsqqsICaQpyptHJYhI1rN0XU")
 
 except discord.errors.LoginFailure as e:
+
     logger.error(f"Discord login failure: {e}")
 except Exception as e:
     logger.error(f"Bot failed to start: {e}")

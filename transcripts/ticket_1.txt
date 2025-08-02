@@ -1,44 +1,9 @@
 Ticket 1 Transcript
-Created by: Suhaan (1259498776046076059)
-Closed by: Suhaan (1259498776046076059)
-Closing reason: Closed by staff - Reason: Lol
-Created at: 2025-07-23 11:14:18.579000+00:00
-Closed at: 2025-07-23 11:20:38.405000+00:00
+Created by: darkwall (1238914120179515402)
+Closed by: darkwall (1238914120179515402)
+Closing reason: Manual closure by staff
+Created at: 2025-08-02 18:48:50.687000+00:00
+Closed at: 2025-08-02 18:48:57.340000+00:00
 ==================================================
 
-[2025-07-23 11:14:18] example: [Embed/File]
-[2025-07-23 11:14:26] Suhaan: Guys
-[2025-07-23 11:14:30] Suhaan: There's a kidnapper
-[2025-07-23 11:14:41] Suhaan: <@1351461013622493195> Give roles
-[2025-07-23 11:15:10] Snapy: Claim message 💀
-[2025-07-23 11:15:12] Suhaan: Give roles
-[2025-07-23 11:15:27] Snapy: Done
-[2025-07-23 11:15:27] Suhaan: <@1351461013622493195> Unclaim it
-[2025-07-23 11:16:18] Snapy: <:a_ClownPepe:1395827995385794581>
-[2025-07-23 11:16:47] Reinhardt: https://cdn.discordapp.com/attachments/1204181585994186832/1357239540250579024/image0-3.gif
-[2025-07-23 11:17:02] Suhaan: <@1351461013622493195> Adding when
-[2025-07-23 11:17:25] Snapy: In just sometime
-[2025-07-23 11:17:32] Suhaan: Ok
-[2025-07-23 11:17:41] Reinhardt: <@1259498776046076059> can you try using call for her button? and give me the out-put?
-[2025-07-23 11:17:53] Suhaan: ❌ **You cannot call Staff yet.**
-This button will be available in **00:16:15** hours.
-[2025-07-23 11:18:14] Reinhardt: hmm, need to add better logic,
-[2025-07-23 11:18:24] Reinhardt: the timer doesnt have a logcal timer
-[2025-07-23 11:18:25] Suhaan: Why tho
-[2025-07-23 11:18:32] Snapy: Fr
-[2025-07-23 11:18:46] Suhaan: Do one thing
-[2025-07-23 11:18:48] Reinhardt: it ment to be 2 hours, but ther its shows 16 mins
-[2025-07-23 11:18:58] Suhaan: Make call button available after 1 hour
-[2025-07-23 11:19:05] Reinhardt: okkay
-[2025-07-23 11:19:09] Suhaan: Make it an hour and half
-[2025-07-23 11:19:14] Suhaan: 1:30 hour
-[2025-07-23 11:19:27] Reinhardt: btw <@1351461013622493195> would you mind if i call someone else in here to join,
-[2025-07-23 11:19:28] Reinhardt: ?
-[2025-07-23 11:19:32] Snapy: Sp change time it in message time too in ticket message there is 2 hour
-[2025-07-23 11:19:42] Snapy: Nope.
-[2025-07-23 11:19:52] Reinhardt: okkay, i make it mechanica, not showdown
-[2025-07-23 11:19:58] Reinhardt: she works with me
-[2025-07-23 11:20:20] Reinhardt: shw would understand graphical things, as embeds
-[2025-07-23 11:20:22] Snapy: Yeh Sure i don't have any issue,
-[2025-07-23 11:20:28] Reinhardt: okkay
-[2025-07-23 11:20:38] example: [Embed/File]
+[2025-08-02 18:48:51] Fakepixel Carry Service: [Embed/File]

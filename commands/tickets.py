@@ -267,10 +267,10 @@ class PrioritySelectView(discord.ui.View):
             await interaction.response.send_message("An error occurred while setting priority.", ephemeral=True)
 
 class FeedbackModal(discord.ui.Modal):
-    def __init__(self, ticket_name: str, guild: discord.Guild):
+    def __init__(self, ticket_name: str, guild_id: int):
         super().__init__(title="Ticket Feedback & Rating")
         self.ticket_name = ticket_name
-        self.guild = guild
+        self.guild_id = guild_id
 
         self.rating = discord.ui.TextInput(
             label="Rate your support experience (1-5 stars)",
@@ -279,6 +279,7 @@ class FeedbackModal(discord.ui.Modal):
             required=True,
             min_length=1,
             max_length=1
+
         )
 
         self.feedback = discord.ui.TextInput(
@@ -322,9 +323,11 @@ class FeedbackModal(discord.ui.Modal):
                 return
 
             ticket_number = self.ticket_name if not self.ticket_name.startswith("ticket-") else self.ticket_name.split('-')[-1]
-            feedback_channel = discord.utils.get(self.guild.channels, name="feedback-logs")
-            if not feedback_channel:
-                await interaction.response.send_message("Feedback channel not found.", ephemeral=True)
+            
+            # Get the guild using the bot instance
+            guild = interaction.client.get_guild(self.guild_id)
+            if not guild:
+                await interaction.response.send_message("Guild not found.", ephemeral=True)
                 return
 
             # Store the feedback
@@ -354,17 +357,16 @@ class FeedbackModal(discord.ui.Modal):
                 closed_by=closed_by
             )
 
-            # Send to feedback log channel (use placeholder if feedback-logs doesn't exist)
-            feedback_channel_id = "FEEDBACK_CHANNEL_ID_PLACEHOLDER"  # Replace with actual channel ID
+            # Send to feedback log channel
+            feedback_channel_id = 1401276435439554580  # Feedback channel ID
             try:
-                feedback_log_channel = self.guild.get_channel(int(feedback_channel_id)) if feedback_channel_id != "FEEDBACK_CHANNEL_ID_PLACEHOLDER" else feedback_channel
+                feedback_log_channel = guild.get_channel(feedback_channel_id)
                 if feedback_log_channel:
                     await feedback_log_channel.send(embed=feedback_embed)
+                else:
+                    logger.error(f"Feedback channel {feedback_channel_id} not found")
             except Exception as e:
                 logger.error(f"Could not send feedback to channel: {e}")
-                # Fallback to original feedback-logs channel if exists
-                if feedback_channel:
-                    await feedback_channel.send(embed=feedback_embed)
 
             # Send confirmation in ticket channel
             confirmation_embed = discord.Embed(
@@ -472,9 +474,11 @@ class FeedbackButton(discord.ui.Button):
                 )
                 return
 
+            # Use the guild ID for FakePixel Giveaways
+            guild_id = 1246452712653062175
             modal = FeedbackModal(
                 ticket_name=self.ticket_number,
-                guild=interaction.guild
+                guild_id=guild_id
             )
             await interaction.response.send_modal(modal)
             logger.info(f"[DEBUG] Opened feedback modal for ticket {self.ticket_number}")
@@ -583,15 +587,15 @@ class TicketCommands(commands.Cog):
             )
             logger.info(f"Created ticket channel: {ticket_channel.name}")
 
-            # Create welcome message for carry tickets
-            staff_role = discord.utils.get(interaction.guild.roles, id=1280539104832127008)
-            staff_mention = f"<@&1280539104832127008>" if staff_role else "@Staff (role not found)"
+            # Create welcome message for carry tickets - mention Carriers role
+            carrier_role = discord.utils.get(interaction.guild.roles, id=1280539104832127008)
+            carrier_mention = f"<@&1280539104832127008>" if carrier_role else "@Carriers (role not found)"
             
             # Format details nicely
             formatted_details = details.replace("**", "").replace("🏰 Dungeon Carry Request", "🏰 Dungeon Carry Request").replace("⚔️ Slayer Carry Request", "⚔️ Slayer Carry Request") if details else "No details provided"
             
             welcome_embed = discord.Embed(
-                title=f"{staff_mention} Welcome @{interaction.user.display_name}! Staff will be with you shortly.",
+                title=f" Welcome @{interaction.user.display_name}! Carriers will be with you shortly.",
                 description=(
                     f"🏰 New {category} Request\n"
                     f"┌─────────────────────────────────┐\n"
@@ -607,7 +611,7 @@ class TicketCommands(commands.Cog):
                     f"⏰ Estimated Response Time: 5-15 minutes\n\n"
                     f"📋 Service Details:\n"
                     f"{formatted_details}\n\n"
-                    f"FxG Carry Service •"
+                    f"Fakepixel Giveaways Carry Service •"
                 ),
                 color=discord.Color.from_rgb(88, 101, 242)
             )
@@ -618,6 +622,9 @@ class TicketCommands(commands.Cog):
             # Add user avatar as thumbnail
             welcome_embed.set_thumbnail(url=interaction.user.display_avatar.url)
 
+            # Send role mention first
+            await ticket_channel.send(f"{carrier_mention}")
+            
             controls = self.TicketControls(self.bot, ticket_number, interaction.user)
             control_message = await ticket_channel.send(
                 embed=welcome_embed,
@@ -701,103 +708,7 @@ class TicketCommands(commands.Cog):
 
 
 
-        @discord.ui.button(label="📞 Call for help!", style=discord.ButtonStyle.red, custom_id="call_help", row=0)
-        async def call_help_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-            try:
-                # Only ticket creator can call for help
-                if interaction.user != self.user:
-                    await interaction.response.send_message(
-                        "Only the ticket creator can call for help!",
-                        ephemeral=True
-                    )
-                    return
-
-                # Check if ticket has been open for at least 1 hour
-                import datetime
-                ticket_data = storage.get_ticket(self.ticket_number)
-                if ticket_data:
-                    created_at_str = ticket_data.get('created_at', '')
-                    if created_at_str:
-                        try:
-                            created_at = datetime.datetime.fromisoformat(created_at_str)
-                            time_since_creation = datetime.datetime.utcnow() - created_at
-                            
-                            if time_since_creation < datetime.timedelta(hours=1):
-                                remaining_time = datetime.timedelta(hours=1) - time_since_creation
-                                total_seconds = remaining_time.total_seconds()
-                                hours = int(total_seconds // 3600)
-                                minutes = int((total_seconds % 3600) // 60)
-                                seconds = int(total_seconds % 60)
-                                
-                                await interaction.response.send_message(
-                                    f"❌ **Call for Help not available yet.**\n"
-                                    f"You can use this button in **{hours:02d}:{minutes:02d}:{seconds:02d}** hours.\n"
-                                    f"*Tickets must be open for at least 1 hour before requesting help.*",
-                                    ephemeral=True
-                                )
-                                return
-                        except Exception as e:
-                            logger.error(f"Error parsing ticket creation time: {e}")
-
-                # Check if the user has already called for help in the last 1 hour
-                last_called = storage.get_last_call_for_help(self.ticket_number)
-                if last_called:
-                    time_difference = datetime.datetime.utcnow() - last_called
-                    if time_difference < datetime.timedelta(hours=1):
-                        remaining_time = datetime.timedelta(hours=1) - time_difference
-                        total_seconds = remaining_time.total_seconds()
-                        hours = int(total_seconds // 3600)
-                        minutes = int((total_seconds % 3600) // 60)
-                        seconds = int(total_seconds % 60)
-
-                        await interaction.response.send_message(
-                            f"❌ **You cannot call Carriers yet.**\n"
-                            f"This button will be available in **{hours:02d}:{minutes:02d}:{seconds:02d}** hours.\n"
-                            f"*Cooldown: 1 hour between help requests*",
-                            ephemeral=True
-                        )
-                        return
-
-                # If all checks pass, proceed with calling for help
-                carriers_role = discord.utils.get(interaction.guild.roles, name="Carriers")
-                if carriers_role:
-                    ping_embed = discord.Embed(
-                        title="🚨 Urgent Help Requested",
-                        description=f"{interaction.user.mention} has requested urgent help in this ticket!",
-                        color=discord.Color.red()
-                    )
-                    await interaction.channel.send(content=f"{carriers_role.mention}", embed=ping_embed)
-                    
-                    # Send "We are on the way" message
-                    response_embed = discord.Embed(
-                        title="🏃‍♂️ Carriers Responding",
-                        description="Our carriers are on the way and will assist you shortly!",
-                        color=discord.Color.blue()
-                    )
-                    await interaction.channel.send(embed=response_embed)
-                else:
-                    ping_embed = discord.Embed(
-                        title="🚨 Urgent Help Requested",
-                        description=f"{interaction.user.mention} has requested urgent help in this ticket!\n*Carriers role not found*",
-                        color=discord.Color.red()
-                    )
-                    await interaction.channel.send(embed=ping_embed)
-
-                await interaction.response.send_message(
-                    embed=discord.Embed(
-                        title="✅ Carriers Notified",
-                        description="Carriers have been notified and are on their way!",
-                        color=discord.Color.green()
-                    ),
-                    ephemeral=True
-                )
-
-                # Store the time the user called for help
-                storage.store_last_call_for_help(self.ticket_number, datetime.datetime.utcnow())
-
-            except Exception as e:
-                logger.error(f"Error in call help button: {e}")
-                await interaction.response.send_message("An error occurred.", ephemeral=True)
+        
 
         
 
@@ -938,15 +849,17 @@ class TicketCommands(commands.Cog):
 
                 # Send transcript to user
                 transcript_embed = discord.Embed(
-                    title=f"Here's the Ticket {self.ticket_number} transcript",
+                    title=f"FakePixel Carrier Service - Ticket #{self.ticket_number} Transcript",
                     description=(
                         f"{self.user.mention}, if you had something important in your ticket or you have faced "
                         f"with some problems while getting help from our Staff, use this transcript which contains "
                         f"of every single message which was sent there.\n\n"
-                        f"Ticket closing reason: {closing_reason}"
+                        f"Ticket closing reason: {closing_reason}\n\n"
+                        f"Thank you for choosing FakePixel Carrier Service!"
                     ),
-                    color=discord.Color.green()
+                    color=discord.Color.from_rgb(88, 101, 242)
                 )
+                transcript_embed.set_image(url="https://media.discordapp.net/attachments/1250029348690464820/1401226777485119529/ChatGPT_Image_Aug_2_2025_11_34_17_AM.png?ex=688f81a1&is=688e3021&hm=c5cc9782fd8c48a43d3f45fa62ef293a62fd6847c996be0714d57dbfc053d0d6&=&format=webp&quality=lossless&width=1208&height=805")
 
                 try:
                     with open(transcript_filename, 'rb') as f:
@@ -956,13 +869,25 @@ class TicketCommands(commands.Cog):
                     logger.warning(f"Could not send transcript to {self.user.display_name}")
 
                 # Send transcript to transcript channel
-                transcript_channel_id = "1282718429161197600"  # Transcript channel ID
+                transcript_channel_id = "1282718429161197600"  # Updated transcript channel ID
                 try:
                     transcript_channel = interaction.guild.get_channel(int(transcript_channel_id))
                     if transcript_channel:
+                        # Create a separate embed for the transcript channel
+                        channel_transcript_embed = discord.Embed(
+                            title=f"FakePixel Carrier Service - Ticket #{self.ticket_number} Transcript",
+                            description=(
+                                f"Ticket created by: {self.user.mention}\n"
+                                f"Closed by: {interaction.user.mention}\n"
+                                f"Closing reason: {closing_reason}"
+                            ),
+                            color=discord.Color.from_rgb(88, 101, 242)
+                        )
+                        channel_transcript_embed.set_image(url="https://media.discordapp.net/attachments/1250029348690464820/1401226777485119529/ChatGPT_Image_Aug_2_2025_11_34_17_AM.png?ex=688f81a1&is=688e3021&hm=c5cc9782fd8c48a43d3f45fa62ef293a62fd6847c996be0714d57dbfc053d0d6&=&format=webp&quality=lossless&width=1208&height=805")
+                        
                         with open(transcript_filename, 'rb') as f:
                             file = discord.File(f, filename=f"ticket_{self.ticket_number}_transcript.txt")
-                            await transcript_channel.send(embed=transcript_embed, file=file)
+                            await transcript_channel.send(embed=channel_transcript_embed, file=file)
                 except Exception as e:
                     logger.error(f"Could not send transcript to channel: {e}")
 
@@ -978,7 +903,7 @@ class TicketCommands(commands.Cog):
                     title="Rate & Give Feedback",
                     description=(
                         f"{self.user.mention}, recently you were contacting Staff by creating a ticket with "
-                        f"ID {self.ticket_number} on LegitPixel Support Server. How would you rate the help of {closer.mention}?\n\n"
+                        f"ID {self.ticket_number} on FakePixel Giveaways. How would you rate the help of {closer.mention}?\n\n"
                         "You have 24 hours to give a review.\n"
                         "Thank you for contacting us!"
                     ),
@@ -1006,7 +931,7 @@ class TicketCommands(commands.Cog):
                     title="How do you rate our help?",
                     description=(
                         f"{creator.mention}, recently you were contacting Staff by creating a ticket with "
-                        f"ID {self.ticket_number} on LegitPixel Support Server. How would you rate the help of {closer.mention}?\n\n"
+                        f"ID {self.ticket_number} on FakePixel Giveaways. How would you rate the help of {closer.mention}?\n\n"
                         "You have 24 hours to give a review.\n"
                         "Thank you for contacting us!"
                     ),
