@@ -44,31 +44,31 @@ class AdminCommands(commands.Cog):
             except Exception as e:
                 logger.error(f"Error deleting old messages: {e}")
 
+            # Create the main ticket embed
             embed = discord.Embed(
-                title="",
+                title="🎫 Carry Service",
                 description=(
-                    "**Welcome to Legitpixel Support Discord Server!**\n"
-                    "This is a place where everyone gets help in any situation!\n"
-                    "Our Team is happy to help you every day :heart:\n\n"
-                    "However we're trying our best, we know we're not on time sometimes due to big amount of concurrent tickets. If you're waiting for our help for more than 2 hours, don't be afraid to click on the Call for help! button to receive a message from our Staff faster. Please do this instead of mentioning Staff, even if they're\n\n"
-                    "After your ticket's closed, we'd be very happy if you rate our work from 1 to 5 stars. This can be made in the message this bot has sent to your DMs, in case they're open. Thank you for contacting us!"
+                    "Need help with Slayer or Dungeon carries? Create a ticket to purchase a carry!\n\n"
+                    "**How to Buy a Carry?**\n"
+                    "Select the category that fits your request. Once your ticket is created, provide all necessary details for faster service.\n\n"
+                    "**Categories**\n"
+                    "⚔️ Slayer Carry – Get assistance with slayer bosses.\n"
+                    "🏰 Dungeon Carry – Get help completing dungeons efficiently.\n\n"
+                    "Fakepixel Giveaways Carrier Staff will assist you as soon as possible.\n"
+                    "⏱️ Please be patient while we process your request"
                 ),
-                color=discord.Color.from_rgb(88, 101, 242)
+                color=discord.Color.blue()
             )
 
-            # Set the main image at the top
-            embed.set_image(url="https://media.discordapp.net/attachments/1392181720651927662/1396951978009170091/Picsart_25-07-21_23-27-22-499.png?ex=68809d29&is=687f4ba9&hm=89e8aaa2cd3b68864d5bc13331fb99a048fd8a0816325b9e065a597dce5e9f11&=&format=webp&quality=lossless&width=1317&height=317")
+            # Set the image at the top
+            embed.set_image(url="https://media.discordapp.net/attachments/1250029348690464820/1401139089247440907/ChatGPT_Image_Aug_2_2025_05_24_11_AM.png?ex=688f2ff6&is=688dde76&hm=b97d6d7bef56af42ec14ca297d64175dd2eae41721ba7251346a84171ce7e290&=&format=webp&quality=lossless&width=1209&height=805")
 
             class TicketCategorySelect(discord.ui.Select):
                 def __init__(self, bot):
                     self.bot = bot
                     options = [
-                        discord.SelectOption(label="Support Tickets", description="Get help with general issues"),
-                        discord.SelectOption(label="Connection/Server/Site Issues", description="Report connection or server problems"),
-                        discord.SelectOption(label="Bug Reports", description="Report bugs or technical issues"),
-                        discord.SelectOption(label="Ban Appeals", description="Appeal a punishment"),
-                        discord.SelectOption(label="Player Reports", description="Report a player"),
-                        discord.SelectOption(label="Others", description="General inquiries and other matters")
+                        discord.SelectOption(label="Dungeon Carry", description="Get help completing dungeons efficiently", emoji="🏰"),
+                        discord.SelectOption(label="Slayer Carry", description="Get assistance with slayer bosses", emoji="⚔️")
                     ]
                     super().__init__(placeholder="Select ticket category...", options=options, custom_id="persistent_category_select")
 
@@ -90,9 +90,25 @@ class AdminCommands(commands.Cog):
                                 )
                                 return
 
-                        # Create ticket directly for all categories (no forms)
                         ticket_commands = self.bot.get_cog('TicketCommands')
-                        if ticket_commands:
+                        if not ticket_commands:
+                            logger.error("TicketCommands cog not found")
+                            await interaction.response.send_message(
+                                "An error occurred while creating the ticket.",
+                                ephemeral=True
+                            )
+                            return
+
+                        # Show forms for Dungeon and Slayer carries, create ticket directly for others
+                        if self.values[0] == "Dungeon Carry":
+                            from commands.tickets import DungeonCarryForm
+                            modal = DungeonCarryForm(self.bot)
+                            await interaction.response.send_modal(modal)
+                        elif self.values[0] == "Slayer Carry":
+                            from commands.tickets import SlayerCarryForm
+                            modal = SlayerCarryForm(self.bot)
+                            await interaction.response.send_modal(modal)
+                        else:
                             await interaction.response.send_message(
                                 embed=discord.Embed(
                                     title="Creating Ticket",
@@ -102,12 +118,6 @@ class AdminCommands(commands.Cog):
                                 ephemeral=True
                             )
                             await ticket_commands.create_ticket_channel(interaction, self.values[0])
-                        else:
-                            logger.error("TicketCommands cog not found")
-                            await interaction.response.send_message(
-                                "An error occurred while creating the ticket.",
-                                ephemeral=True
-                            )
 
                     except Exception as e:
                         logger.error(f"Error in ticket creation callback: {e}")
@@ -176,18 +186,27 @@ class PersistentTicketView(discord.ui.View):
         placeholder="Select ticket category...",
         custom_id="persistent_category_select",
         options=[
-            discord.SelectOption(label="Support Tickets", description="Get help with general issues"),
-            discord.SelectOption(label="Connection/Server/Site Issues", description="Report connection or server problems"),
-            discord.SelectOption(label="Bug Reports", description="Report bugs or technical issues"),
-            discord.SelectOption(label="Ban Appeals", description="Appeal a punishment"),
-            discord.SelectOption(label="Player Reports", description="Report a player"),
-            discord.SelectOption(label="Others", description="General inquiries and other matters")
+            discord.SelectOption(label="Dungeon Carry", description="Get help completing dungeons efficiently", emoji="🏰"),
+            discord.SelectOption(label="Slayer Carry", description="Get assistance with slayer bosses", emoji="⚔️")
         ]
     )
     async def select_callback(self, interaction: discord.Interaction, select: discord.ui.Select):
         # Handle ticket creation logic here
         ticket_commands = self.bot.get_cog('TicketCommands')
-        if ticket_commands:
+        if not ticket_commands:
+            await interaction.response.send_message("An error occurred while creating the ticket.", ephemeral=True)
+            return
+
+        # Show forms for Dungeon and Slayer carries, create ticket directly for others
+        if select.values[0] == "Dungeon Carry":
+            from commands.tickets import DungeonCarryForm
+            modal = DungeonCarryForm(self.bot)
+            await interaction.response.send_modal(modal)
+        elif select.values[0] == "Slayer Carry":
+            from commands.tickets import SlayerCarryForm
+            modal = SlayerCarryForm(self.bot)
+            await interaction.response.send_modal(modal)
+        else:
             await interaction.response.defer(ephemeral=True)
             await ticket_commands.create_ticket_channel(interaction, select.values[0])
 

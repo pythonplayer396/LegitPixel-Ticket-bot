@@ -8,6 +8,264 @@ from typing import Optional
 
 logger = logging.getLogger('discord')
 
+class DungeonCarryForm(discord.ui.Modal):
+    def __init__(self, bot):
+        super().__init__(title="🏰 Dungeon Carry Request")
+        self.bot = bot
+
+        self.ingame_name = discord.ui.TextInput(
+            label="What's your In-Game Name?",
+            style=discord.TextStyle.short,
+            placeholder="Enter your Minecraft username...",
+            required=True,
+            max_length=16
+        )
+
+        self.dungeon_floor = discord.ui.TextInput(
+            label="Which dungeon floor carry you wanna purchase?",
+            style=discord.TextStyle.short,
+            placeholder="e.g., Floor 7, Master 5, etc...",
+            required=True,
+            max_length=50
+        )
+
+        self.quantity = discord.ui.TextInput(
+            label="How much carries you want? (Quantity)",
+            style=discord.TextStyle.short,
+            placeholder="Enter number of carries...",
+            required=True,
+            max_length=10
+        )
+
+        self.additional_notes = discord.ui.TextInput(
+            label="Any additional note? (Not required)",
+            style=discord.TextStyle.paragraph,
+            placeholder="Any special requirements or notes...",
+            required=False,
+            max_length=500
+        )
+
+        self.add_item(self.ingame_name)
+        self.add_item(self.dungeon_floor)
+        self.add_item(self.quantity)
+        self.add_item(self.additional_notes)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            # Create the details string
+            details = (
+                f"**🏰 Dungeon Carry Request**\n"
+                f"**In-Game Name:** {self.ingame_name.value}\n"
+                f"**Dungeon Floor:** {self.dungeon_floor.value}\n"
+                f"**Quantity:** {self.quantity.value}\n"
+                f"**Additional Notes:** {self.additional_notes.value or 'None'}"
+            )
+
+            ticket_commands = self.bot.get_cog('TicketCommands')
+            if ticket_commands:
+                await interaction.response.send_message(
+                    embed=discord.Embed(
+                        title="Creating Dungeon Carry Ticket",
+                        description="Your ticket is being created...",
+                        color=discord.Color.blue()
+                    ),
+                    ephemeral=True
+                )
+                await ticket_commands.create_ticket_channel(interaction, "Dungeon Carry", details)
+            else:
+                await interaction.response.send_message(
+                    "An error occurred while creating the ticket.",
+                    ephemeral=True
+                )
+        except Exception as e:
+            logger.error(f"Error in DungeonCarryForm submission: {e}")
+            await interaction.response.send_message(
+                "An error occurred while processing your request.",
+                ephemeral=True
+            )
+
+class SlayerCarryForm(discord.ui.Modal):
+    def __init__(self, bot):
+        super().__init__(title="⚔️ Slayer Carry Request")
+        self.bot = bot
+
+        self.ingame_name = discord.ui.TextInput(
+            label="What's your In-Game Name?",
+            style=discord.TextStyle.short,
+            placeholder="Enter your Minecraft username...",
+            required=True,
+            max_length=16
+        )
+
+        self.slayer_type = discord.ui.TextInput(
+            label="Which slayer you wanna purchase?",
+            style=discord.TextStyle.short,
+            placeholder="e.g., Revenant Horror, Tarantula Broodfather, etc...",
+            required=True,
+            max_length=50
+        )
+
+        self.tier = discord.ui.TextInput(
+            label="Which tier you wanna purchase?",
+            style=discord.TextStyle.short,
+            placeholder="e.g., Tier 1, Tier 4, etc...",
+            required=True,
+            max_length=20
+        )
+
+        self.quantity = discord.ui.TextInput(
+            label="How much carries you want? (Quantity)",
+            style=discord.TextStyle.short,
+            placeholder="Enter number of carries...",
+            required=True,
+            max_length=10
+        )
+
+        self.additional_notes = discord.ui.TextInput(
+            label="Any additional note? (Not required)",
+            style=discord.TextStyle.paragraph,
+            placeholder="Any special requirements or notes...",
+            required=False,
+            max_length=500
+        )
+
+        self.add_item(self.ingame_name)
+        self.add_item(self.slayer_type)
+        self.add_item(self.tier)
+        self.add_item(self.quantity)
+        self.add_item(self.additional_notes)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            # Create the details string
+            details = (
+                f"**⚔️ Slayer Carry Request**\n"
+                f"**In-Game Name:** {self.ingame_name.value}\n"
+                f"**Slayer Type:** {self.slayer_type.value}\n"
+                f"**Tier:** {self.tier.value}\n"
+                f"**Quantity:** {self.quantity.value}\n"
+                f"**Additional Notes:** {self.additional_notes.value or 'None'}"
+            )
+
+            ticket_commands = self.bot.get_cog('TicketCommands')
+            if ticket_commands:
+                await interaction.response.send_message(
+                    embed=discord.Embed(
+                        title="Creating Slayer Carry Ticket",
+                        description="Your ticket is being created...",
+                        color=discord.Color.blue()
+                    ),
+                    ephemeral=True
+                )
+                await ticket_commands.create_ticket_channel(interaction, "Slayer Carry", details)
+            else:
+                await interaction.response.send_message(
+                    "An error occurred while creating the ticket.",
+                    ephemeral=True
+                )
+        except Exception as e:
+            logger.error(f"Error in SlayerCarryForm submission: {e}")
+            await interaction.response.send_message(
+                "An error occurred while processing your request.",
+                ephemeral=True
+            )
+
+class PrioritySelectView(discord.ui.View):
+    def __init__(self, bot, ticket_number: str):
+        super().__init__(timeout=300)  # 5 minute timeout
+        self.bot = bot
+        self.ticket_number = ticket_number
+
+    @discord.ui.button(label="Low", style=discord.ButtonStyle.green, emoji="🟢", custom_id="low_priority_{ticket_number}")
+    async def low_priority(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.set_priority(interaction, "Low", "🟢")
+
+    @discord.ui.button(label="Medium", style=discord.ButtonStyle.primary, emoji="🟡", custom_id="medium_priority_{ticket_number}")
+    async def medium_priority(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.set_priority(interaction, "Medium", "🟡")
+
+    @discord.ui.button(label="High", style=discord.ButtonStyle.danger, emoji="🟠", custom_id="high_priority_{ticket_number}")
+    async def high_priority(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.set_priority(interaction, "High", "🟠")
+
+    @discord.ui.button(label="Urgent", style=discord.ButtonStyle.danger, emoji="🔴", custom_id="urgent_priority_{ticket_number}")
+    async def urgent_priority(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.set_priority(interaction, "Urgent", "🔴")
+
+    async def set_priority(self, interaction: discord.Interaction, priority: str, emoji: str):
+        try:
+            # Check if priority has already been set for this ticket
+            existing_priority = storage.get_ticket_priority(self.ticket_number)
+            if existing_priority:
+                await interaction.response.send_message(
+                    f"Priority has already been set for this ticket to **{existing_priority}**. Priority can only be selected once per ticket.",
+                    ephemeral=True
+                )
+                return
+
+            # Store the priority
+            storage.set_ticket_priority(self.ticket_number, priority)
+            
+            priority_embed = discord.Embed(
+                title=f"{emoji} Priority Set: {priority}",
+                description=f"Ticket priority has been set to **{priority}** by {interaction.user.mention}",
+                color=discord.Color.blue()
+            )
+            
+            # Send to the ticket channel
+            ticket_channel = None
+            for channel in interaction.guild.channels:
+                if channel.name == f"ticket-{self.ticket_number}" or channel.name.endswith(f"ticket-{self.ticket_number}"):
+                    ticket_channel = channel
+                    break
+            
+            if ticket_channel:
+                await ticket_channel.send(embed=priority_embed)
+                
+                # Update ticket channel name with priority color
+                new_channel_name = f"{emoji}ticket-{self.ticket_number}"
+                try:
+                    await ticket_channel.edit(name=new_channel_name)
+                except Exception as e:
+                    logger.error(f"Error updating channel name: {e}")
+            
+            # Send notification to priority history channel
+            try:
+                # Look for existing priority history channel
+                priority_channel = discord.utils.get(interaction.guild.channels, name="priority-history")
+                
+                # Create the channel if it doesn't exist
+                if not priority_channel:
+                    try:
+                        priority_channel = await interaction.guild.create_text_channel(
+                            name="priority-history",
+                            topic="Channel for tracking ticket priority changes"
+                        )
+                        logger.info("Created priority-history channel")
+                    except Exception as e:
+                        logger.error(f"Error creating priority-history channel: {e}")
+                
+                # Send notification if channel exists or was created
+                if priority_channel:
+                    notification_embed = discord.Embed(
+                        title=f"{emoji} Priority Alert",
+                        description=f"Ticket #{self.ticket_number} priority selected by {interaction.user.mention}",
+                        color=discord.Color.blue()
+                    )
+                    await priority_channel.send(embed=notification_embed)
+                    
+            except Exception as e:
+                logger.error(f"Error sending priority notification: {e}")
+            
+            await interaction.response.send_message(
+                f"Priority set to **{priority}** {emoji}",
+                ephemeral=True
+            )
+
+        except Exception as e:
+            logger.error(f"Error setting priority: {e}")
+            await interaction.response.send_message("An error occurred while setting priority.", ephemeral=True)
+
 class FeedbackModal(discord.ui.Modal):
     def __init__(self, ticket_name: str, guild: discord.Guild):
         super().__init__(title="Ticket Feedback & Rating")
@@ -173,10 +431,10 @@ class CloseReasonModal(discord.ui.Modal):
             ticket_commands = self.bot.get_cog('TicketCommands')
             if ticket_commands:
                 controls = ticket_commands.TicketControls(self.bot, self.ticket_number, self.ticket_creator)
-                
+
                 # Create transcript with reason
                 await controls.create_and_send_transcript(interaction, f"Closed by staff - Reason: {self.reason.value}")
-                
+
                 # Delete the channel after transcript is sent
                 await asyncio.sleep(5)
                 await interaction.channel.delete()
@@ -235,7 +493,7 @@ class FeedbackButton(discord.ui.Button):
 class TicketCommands(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.active_categories = ['Support Tickets', 'Connection/Server/Site Issues', 'Bug Reports', 'Ban Appeals', 'Player Reports', 'Others']
+        self.active_categories = ['Dungeon Carry', 'Slayer Carry']
         logger.info("TicketCommands cog initialized")
 
     async def parse_ticket_channel(self, channel_name: str, context: str = "Unknown") -> tuple[str, str]:
@@ -245,7 +503,7 @@ class TicketCommands(commands.Cog):
                 return ("", "")
 
             logger.info(f"[DEBUG] {context} - Parsing channel name: {channel_name}")
-            
+
             # New format: ticket-1
             if channel_name.startswith("ticket-"):
                 parts = channel_name.split('-')
@@ -255,7 +513,7 @@ class TicketCommands(commands.Cog):
                     # Return empty username for now, will be handled by caller
                     logger.info(f"[DEBUG] {context} - Found ticket number: {ticket_number}")
                     return (ticket_number, "")
-            
+
             logger.error(f"[DEBUG] {context} - Could not parse channel format")
             return ("", "")
 
@@ -325,21 +583,38 @@ class TicketCommands(commands.Cog):
             )
             logger.info(f"Created ticket channel: {ticket_channel.name}")
 
-            # Custom welcome message
+            # Create welcome message for carry tickets
+            staff_role = discord.utils.get(interaction.guild.roles, id=1280539104832127008)
+            staff_mention = f"<@&1280539104832127008>" if staff_role else "@Staff (role not found)"
+            
+            # Format details nicely
+            formatted_details = details.replace("**", "").replace("🏰 Dungeon Carry Request", "🏰 Dungeon Carry Request").replace("⚔️ Slayer Carry Request", "⚔️ Slayer Carry Request") if details else "No details provided"
+            
             welcome_embed = discord.Embed(
-                title="Welcome to the LegitPixel Support Server",
+                title=f"{staff_mention} Welcome @{interaction.user.display_name}! Staff will be with you shortly.",
                 description=(
-                    "Thank you for contacting LegitPixel Support. Our team is here to assist you with any questions or issues you may have. We are committed to providing helpful, timely, and professional support.\n\n"
-                    "Please note that during busy periods, responses may take longer than usual. If you've been waiting for more than 2 hours, kindly use the Call for Help button instead of tagging staff directly.\n\n"
-                    "Please describe your issue below, and a team member will assist you as soon as possible.\n\n"
-                    "Once your issue has been resolved, you will receive a message to rate your support experience. Your feedback helps us improve our service."
+                    f"🏰 New {category} Request\n"
+                    f"┌─────────────────────────────────┐\n"
+                    f"│ Welcome to FxG Carry Service │\n"
+                    f"└─────────────────────────────────┘\n\n"
+                    f"🎯 Service Type: {category}\n"
+                    f"🔖 Ticket ID: #{ticket_number}\n"
+                    f"👤 Customer: @{interaction.user.display_name}\n\n"
+                    f"📞 Next Steps:\n"
+                    f"• One of our professional carriers will assist you shortly\n"
+                    f"• Please provide any additional details if needed\n"
+                    f"• Use priority settings only when absolutely necessary\n\n"
+                    f"⏰ Estimated Response Time: 5-15 minutes\n\n"
+                    f"📋 Service Details:\n"
+                    f"{formatted_details}\n\n"
+                    f"FxG Carry Service •"
                 ),
                 color=discord.Color.from_rgb(88, 101, 242)
             )
-            
+
             # Set the new image at the top
-            welcome_embed.set_image(url="https://media.discordapp.net/attachments/1392181720651927662/1396951921281077330/Picsart_25-07-21_23-17-00-620.png?ex=68809d1c&is=687f4b9c&hm=939d0e939dedb62b47f36161aec06dac4ec53ddde3701e0e9bbf00286376b884&=&format=webp&quality=lossless&width=1317&height=327")
-            
+            welcome_embed.set_image(url="https://media.discordapp.net/attachments/1250029348690464820/1401139089985634405/ChatGPT_Image_Aug_2_2025_05_44_48_AM.png?ex=688f2ff6&is=688dde76&hm=eb399c9e3f14002c638894af3e51e3b1cd35e9c8e85c4132e59c9ec56ebefaf5&=&format=webp&quality=lossless&width=1209&height=805")
+
             # Add user avatar as thumbnail
             welcome_embed.set_thumbnail(url=interaction.user.display_avatar.url)
 
@@ -396,11 +671,11 @@ class TicketCommands(commands.Cog):
             self.user = user
             self.claimed_by = None
             self.message: Optional[discord.Message] = None
-            
+
             # Button will always be enabled and check cooldown when clicked
-            
+
             logger.info(f"Initializing TicketControls for ticket {ticket_number}")
-        
+
         def _update_call_help_button_state(self):
             """Update the call for help button state based on cooldown"""
             # Keep button always enabled - cooldown check will be done when clicked
@@ -424,7 +699,7 @@ class TicketCommands(commands.Cog):
         async def parse_ticket_channel(self, channel_name: str, context: str = "Unknown") -> tuple[str, str]:
             return await self.bot.get_cog('TicketCommands').parse_ticket_channel(channel_name, context)
 
-        
+
 
         @discord.ui.button(label="📞 Call for help!", style=discord.ButtonStyle.red, custom_id="call_help", row=0)
         async def call_help_button(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -437,191 +712,101 @@ class TicketCommands(commands.Cog):
                     )
                     return
 
-                # Check if the user has already called for help in the last 2 hours
+                # Check if ticket has been open for at least 1 hour
+                import datetime
+                ticket_data = storage.get_ticket(self.ticket_number)
+                if ticket_data:
+                    created_at_str = ticket_data.get('created_at', '')
+                    if created_at_str:
+                        try:
+                            created_at = datetime.datetime.fromisoformat(created_at_str)
+                            time_since_creation = datetime.datetime.utcnow() - created_at
+                            
+                            if time_since_creation < datetime.timedelta(hours=1):
+                                remaining_time = datetime.timedelta(hours=1) - time_since_creation
+                                total_seconds = remaining_time.total_seconds()
+                                hours = int(total_seconds // 3600)
+                                minutes = int((total_seconds % 3600) // 60)
+                                seconds = int(total_seconds % 60)
+                                
+                                await interaction.response.send_message(
+                                    f"❌ **Call for Help not available yet.**\n"
+                                    f"You can use this button in **{hours:02d}:{minutes:02d}:{seconds:02d}** hours.\n"
+                                    f"*Tickets must be open for at least 1 hour before requesting help.*",
+                                    ephemeral=True
+                                )
+                                return
+                        except Exception as e:
+                            logger.error(f"Error parsing ticket creation time: {e}")
+
+                # Check if the user has already called for help in the last 1 hour
                 last_called = storage.get_last_call_for_help(self.ticket_number)
                 if last_called:
-                    import datetime
                     time_difference = datetime.datetime.utcnow() - last_called
-                    if time_difference < datetime.timedelta(hours=2):
-                        remaining_time = datetime.timedelta(hours=2) - time_difference
+                    if time_difference < datetime.timedelta(hours=1):
+                        remaining_time = datetime.timedelta(hours=1) - time_difference
                         total_seconds = remaining_time.total_seconds()
                         hours = int(total_seconds // 3600)
                         minutes = int((total_seconds % 3600) // 60)
                         seconds = int(total_seconds % 60)
-                        
-                        # Create initial countdown message with live timer
-                        countdown_message_text = (
-                            f"❌ **You cannot call Staff yet.**\n"
-                            f"This button will be available in **{hours:02d}:{minutes:02d}:{seconds:02d}** hours.\n"
-                            f"*This timer updates in real-time*"
-                        )
-                        
+
                         await interaction.response.send_message(
-                            countdown_message_text,
+                            f"❌ **You cannot call Carriers yet.**\n"
+                            f"This button will be available in **{hours:02d}:{minutes:02d}:{seconds:02d}** hours.\n"
+                            f"*Cooldown: 1 hour between help requests*",
                             ephemeral=True
                         )
-                        
-                        # Create a live updating timer
-                        countdown_message = await interaction.original_response()
-                        
-                        # Update the timer every second for accuracy
-                        while total_seconds > 0:
-                            await asyncio.sleep(1)  # Wait 1 second
-                            
-                            # Recalculate remaining time
-                            current_time = datetime.datetime.utcnow()
-                            time_difference = current_time - last_called
-                            if time_difference >= datetime.timedelta(hours=2):
-                                # Cooldown is over
-                                final_message = "✅ **Cooldown Complete**\nYou can now use the Call for Help button again!"
-                                try:
-                                    await countdown_message.edit(content=final_message)
-                                except:
-                                    pass  # Message might be deleted or expired
-                                break
-                            
-                            remaining_time = datetime.timedelta(hours=2) - time_difference
-                            total_seconds = remaining_time.total_seconds()
-                            hours = int(total_seconds // 3600)
-                            minutes = int((total_seconds % 3600) // 60)
-                            seconds = int(total_seconds % 60)
-                            
-                            # Update the message with real-time countdown
-                            updated_message_text = (
-                                f"❌ **You cannot call Staff yet.**\n"
-                                f"This button will be available in **{hours:02d}:{minutes:02d}:{seconds:02d}** hours.\n"
-                            )
-                            
-                            # Only update the message every 5 seconds to avoid rate limits
-                            if int(total_seconds) % 5 == 0 or total_seconds <= 10:
-                                try:
-                                    await countdown_message.edit(content=updated_message_text)
-                                except:
-                                    break  # Stop updating if message is no longer available
-                        
                         return
 
-                # If no cooldown, proceed with calling for help
-                staff_role = discord.utils.get(interaction.guild.roles, name="Staff")
-                if staff_role:
+                # If all checks pass, proceed with calling for help
+                carriers_role = discord.utils.get(interaction.guild.roles, name="Carriers")
+                if carriers_role:
                     ping_embed = discord.Embed(
-                        title="🚨 Help Requested",
+                        title="🚨 Urgent Help Requested",
                         description=f"{interaction.user.mention} has requested urgent help in this ticket!",
                         color=discord.Color.red()
                     )
-                    await interaction.channel.send(content=f"{staff_role.mention}", embed=ping_embed)
+                    await interaction.channel.send(content=f"{carriers_role.mention}", embed=ping_embed)
                     
-                    await interaction.response.edit_message(view=self)
-                    
-                    success_embed = discord.Embed(
-                        title="✅ Staff Notified",
-                        description="Staff has been notified and will assist you shortly!",
-                        color=discord.Color.green()
+                    # Send "We are on the way" message
+                    response_embed = discord.Embed(
+                        title="🏃‍♂️ Carriers Responding",
+                        description="Our carriers are on the way and will assist you shortly!",
+                        color=discord.Color.blue()
                     )
-                    await interaction.followup.send(embed=success_embed, ephemeral=True)
+                    await interaction.channel.send(embed=response_embed)
+                else:
+                    ping_embed = discord.Embed(
+                        title="🚨 Urgent Help Requested",
+                        description=f"{interaction.user.mention} has requested urgent help in this ticket!\n*Carriers role not found*",
+                        color=discord.Color.red()
+                    )
+                    await interaction.channel.send(embed=ping_embed)
 
-                    # Store the time the user called for help
-                    import datetime
-                    storage.store_last_call_for_help(self.ticket_number, datetime.datetime.utcnow())
+                await interaction.response.send_message(
+                    embed=discord.Embed(
+                        title="✅ Carriers Notified",
+                        description="Carriers have been notified and are on their way!",
+                        color=discord.Color.green()
+                    ),
+                    ephemeral=True
+                )
+
+                # Store the time the user called for help
+                storage.store_last_call_for_help(self.ticket_number, datetime.datetime.utcnow())
 
             except Exception as e:
                 logger.error(f"Error in call help button: {e}")
                 await interaction.response.send_message("An error occurred.", ephemeral=True)
 
-        @discord.ui.button(label="🎫 Get ticket and start helping", style=discord.ButtonStyle.green, custom_id="claim_ticket", row=0)
-        async def claim_ticket_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-            try:
-                # Check if user has staff permissions
-                has_permission = False
-                required_roles = ["Staff", "Ticket Support", "Ticket Admin", "Admin"]
-
-                for role in interaction.user.roles:
-                    if role.name in required_roles:
-                        has_permission = True
-                        break
-
-                if not has_permission:
-                    await interaction.response.send_message(
-                        "You don't have permission to claim tickets!",
-                        ephemeral=True
-                    )
-                    return
-
-                if self.claimed_by is None:
-                    # Claim the ticket
-                    self.claimed_by = interaction.user
-                    button.label = "🔓 Unclaim"
-                    button.style = discord.ButtonStyle.red
-                    storage.claim_ticket(self.ticket_number, interaction.user.name)
-
-                    # Update delete button to close button
-                    for item in self.children:
-                        if hasattr(item, 'custom_id') and item.custom_id == "delete":
-                            item.label = "🔒 Close ticket"
-                            break
-
-                    await interaction.response.edit_message(view=self)
-                    # Random claim messages
-                    import random
-                    claim_messages = [
-                        f"{self.user.mention} don't fall for {interaction.user.mention}'s smooth typing — Flexxy sees everything",
-                        f"{interaction.user.mention} is here to help, not steal hearts — back off, {self.user.mention}",
-                        f"Flexxy said: {self.user.mention}, focus on the issue, not the rizz",
-                        f"{self.user.mention} opened a support ticket and got emotionally supported by {interaction.user.mention}",
-                        f"{interaction.user.mention} isn't your tech bae, {self.user.mention} — Flexxy already claimed them",
-                        f"{self.user.mention} googled the issue, but found feelings instead — watch out",
-                        f"{interaction.user.mention} helped with your problem and your heartbeat — but stay loyal to Flexxy",
-                        f"Flexxy ain't running a dating sim — {self.user.mention} calm down",
-                        f"{interaction.user.mention} pulled up with answers and unspoken game — dangerous combo",
-                        f"{self.user.mention} don't get too cozy in this ticket, {interaction.user.mention} belongs to the network... and Flexxy",
-                        f"{interaction.user.mention} said \"try restarting\" and {self.user.mention} fell in love",
-                        f"{self.user.mention} this is a support ticket, not a fan club",
-                        f"{interaction.user.mention} helped you and now you blushing — Flexxy disapproves",
-                        f"{self.user.mention} opened a ticket, {interaction.user.mention} opened their heart — yikes",
-                        f"{interaction.user.mention} showed up and {self.user.mention} forgot what they needed",
-                        f"This ain't therapy, {self.user.mention} — stop trauma dumping on {interaction.user.mention}",
-                        f"{interaction.user.mention} fixed your issue and your trust issues — impressive",
-                        f"{self.user.mention} don't catch feelings, catch updates",
-                        f"{interaction.user.mention} is not your emotional support staff — Flexxy keeps 'em busy",
-                        f"Flexxy watching you flirt in a support ticket like: \"not again…\""
-                    ]
-                    random_message = random.choice(claim_messages)
-                    await interaction.followup.send(random_message)
-
-                else:
-                    # Unclaim the ticket
-                    if interaction.user == self.claimed_by or any(role.name == "Admin" for role in interaction.user.roles):
-                        self.claimed_by = None
-                        button.label = "🎫 Get ticket and start helping"
-                        button.style = discord.ButtonStyle.green
-                        storage.claim_ticket(self.ticket_number, "Unclaimed")
-
-                        # Update close button back to delete button
-                        for item in self.children:
-                            if hasattr(item, 'custom_id') and item.custom_id == "delete":
-                                item.label = "🗑️ Delete ticket"
-                                break
-
-                        await interaction.response.edit_message(view=self)
-                        await interaction.followup.send("Ticket has been unclaimed.")
-                    else:
-                        await interaction.response.send_message(
-                            "You cannot unclaim a ticket claimed by someone else!",
-                            ephemeral=True
-                        )
-
-            except Exception as e:
-                logger.error(f"Error in claim ticket button: {e}")
-                await interaction.response.send_message("An error occurred.", ephemeral=True)
-
         
 
-        @discord.ui.button(label="🔒 Close with Reason", style=discord.ButtonStyle.secondary, custom_id="close_reason", row=1)
-        async def close_with_reason_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        @discord.ui.button(label="Close", style=discord.ButtonStyle.red, custom_id="close", row=1)
+        async def close_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
             try:
-                # Permission check
+                # Permission check - only Carriers role and above can close tickets
                 has_permission = False
-                required_roles = ["Staff", "Ticket Support", "Ticket Admin", "Admin"]
+                required_roles = ["Carriers", "Staff", "Ticket Support", "Ticket Admin", "Admin"]
 
                 for role in interaction.user.roles:
                     if role.name in required_roles:
@@ -630,50 +815,99 @@ class TicketCommands(commands.Cog):
 
                 if not has_permission:
                     await interaction.response.send_message(
-                        "You don't have permission to close tickets!",
-                        ephemeral=True
-                    )
-                    return
-
-                # Show modal for reason input
-                modal = CloseReasonModal(self.bot, self.ticket_number, self.user)
-                await interaction.response.send_modal(modal)
-
-            except Exception as e:
-                logger.error(f"Error in close with reason button: {e}")
-                await interaction.response.send_message("An error occurred.", ephemeral=True)
-
-        @discord.ui.button(label="🗑️ Delete ticket", style=discord.ButtonStyle.red, custom_id="delete", row=1)
-        async def delete_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-            try:
-                # Permission check
-                has_permission = False
-                required_roles = ["Staff", "Ticket Support", "Ticket Admin", "Admin"]
-
-                for role in interaction.user.roles:
-                    if role.name in required_roles:
-                        has_permission = True
-                        break
-
-                if not has_permission:
-                    await interaction.response.send_message(
-                        "You don't have permission to delete tickets!",
+                        "Only Carriers and higher roles can close tickets!",
                         ephemeral=True
                     )
                     return
 
                 await interaction.response.send_message("Creating transcript and closing ticket...", ephemeral=True)
-                
+
                 # Create transcript
                 await self.create_and_send_transcript(interaction, "Manual closure by staff")
-                
+
                 # Delete the channel after transcript is sent
                 await asyncio.sleep(3)
                 await interaction.channel.delete()
+            except Exception as e:
+                  logger.error(f"Error in close ticket button: {e}")
+                  await interaction.response.send_message("An error occurred.", ephemeral=True)
+
+        # Priority select button
+        @discord.ui.button(label="Priority Select", style=discord.ButtonStyle.grey, custom_id="priority_select", row=1)
+        async def priority_select(self, interaction: discord.Interaction, button: discord.ui.Button):
+            try:
+                # Everyone can select priority
+                priority_view = PrioritySelectView(self.bot, self.ticket_number)
+                await interaction.response.send_message(
+                    "Select the priority level for this ticket:",
+                    view=priority_view,
+                    ephemeral=True
+                )
 
             except Exception as e:
-                logger.error(f"Error in delete button: {e}")
+                logger.error(f"Error in priority select button: {e}")
                 await interaction.response.send_message("An error occurred.", ephemeral=True)
+
+        #Only close button remains
+
+        #@discord.ui.button(label="🔒 Close with Reason", style=discord.ButtonStyle.secondary, custom_id="close_reason", row=1)
+        #async def close_with_reason_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        #    try:
+        #        # Permission check
+        #        has_permission = False
+        #        required_roles = ["Staff", "Ticket Support", "Ticket Admin", "Admin"]
+
+        #        for role in interaction.user.roles:
+        #            if role.name in required_roles:
+        #                has_permission = True
+        #                break
+
+        #        if not has_permission:
+        #            await interaction.response.send_message(
+        #                "You don't have permission to close tickets!",
+        #                ephemeral=True
+        #            )
+        #            return
+
+        #        # Show modal for reason input
+        #        modal = CloseReasonModal(self.bot, self.ticket_number, self.user)
+        #        await interaction.response.send_modal(modal)
+
+        #    except Exception as e:
+        #        logger.error(f"Error in close with reason button: {e}")
+        #        await interaction.response.send_message("An error occurred.", ephemeral=True)
+
+        #@discord.ui.button(label="🗑️ Delete ticket", style=discord.ButtonStyle.red, custom_id="delete", row=1)
+        #async def delete_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        #    try:
+        #        # Permission check
+        #        has_permission = False
+        #        required_roles = ["Staff", "Ticket Support", "Ticket Admin", "Admin"]
+
+        #        for role in interaction.user.roles:
+        #            if role.name in required_roles:
+        #                has_permission = True
+        #                break
+
+        #        if not has_permission:
+        #            await interaction.response.send_message(
+        #                "You don't have permission to delete tickets!",
+        #                ephemeral=True
+        #            )
+        #            return
+
+        #        await interaction.response.send_message("Creating transcript and closing ticket...", ephemeral=True)
+
+        #        # Create transcript
+        #        await self.create_and_send_transcript(interaction, "Manual closure by staff")
+
+        #        # Delete the channel after transcript is sent
+        #        await asyncio.sleep(3)
+        #        await interaction.channel.delete()
+
+        #    except Exception as e:
+        #        logger.error(f"Error in delete button: {e}")
+        #        await interaction.response.send_message("An error occurred.", ephemeral=True)
 
         async def create_and_send_transcript(self, interaction: discord.Interaction, closing_reason: str = "Ticket closed"):
             try:
@@ -685,7 +919,7 @@ class TicketCommands(commands.Cog):
                 transcript_content += f"Created at: {interaction.channel.created_at}\n"
                 transcript_content += f"Closed at: {interaction.created_at}\n"
                 transcript_content += "=" * 50 + "\n\n"
-                
+
                 # Get messages from channel
                 messages = []
                 async for message in interaction.channel.history(limit=None, oldest_first=True):
@@ -693,15 +927,15 @@ class TicketCommands(commands.Cog):
                         timestamp = message.created_at.strftime("%Y-%m-%d %H:%M:%S")
                         content = message.content or "[Embed/File]"
                         transcript_content += f"[{timestamp}] {message.author.display_name}: {content}\n"
-                
+
                 # Save transcript file
                 transcript_filename = f"transcripts/ticket_{self.ticket_number}.txt"
                 import os
                 os.makedirs("transcripts", exist_ok=True)
-                
+
                 with open(transcript_filename, "w", encoding="utf-8") as f:
                     f.write(transcript_content)
-                
+
                 # Send transcript to user
                 transcript_embed = discord.Embed(
                     title=f"Here's the Ticket {self.ticket_number} transcript",
@@ -713,28 +947,28 @@ class TicketCommands(commands.Cog):
                     ),
                     color=discord.Color.green()
                 )
-                
+
                 try:
                     with open(transcript_filename, 'rb') as f:
                         file = discord.File(f, filename=f"ticket_{self.ticket_number}_transcript.txt")
                         await self.user.send(embed=transcript_embed, file=file)
                 except discord.Forbidden:
                     logger.warning(f"Could not send transcript to {self.user.display_name}")
-                
-                # Send transcript to transcript channel (placeholder for channel ID)
-                transcript_channel_id = "TRANSCRIPT_CHANNEL_ID_PLACEHOLDER"  # Replace with actual channel ID
+
+                # Send transcript to transcript channel
+                transcript_channel_id = "1282718429161197600"  # Transcript channel ID
                 try:
-                    transcript_channel = interaction.guild.get_channel(int(transcript_channel_id)) if transcript_channel_id != "TRANSCRIPT_CHANNEL_ID_PLACEHOLDER" else None
+                    transcript_channel = interaction.guild.get_channel(int(transcript_channel_id))
                     if transcript_channel:
                         with open(transcript_filename, 'rb') as f:
                             file = discord.File(f, filename=f"ticket_{self.ticket_number}_transcript.txt")
                             await transcript_channel.send(embed=transcript_embed, file=file)
                 except Exception as e:
                     logger.error(f"Could not send transcript to channel: {e}")
-                
+
                 # Send feedback request
                 await self.send_feedback_request(interaction.user)
-                
+
             except Exception as e:
                 logger.error(f"Error creating transcript: {e}")
 
@@ -761,7 +995,7 @@ class TicketCommands(commands.Cog):
                     await self.user.send(embed=feedback_embed, view=feedback_view)
                 except discord.Forbidden:
                     logger.warning(f"Could not send feedback request to {self.user.display_name}")
-                    
+
             except Exception as e:
                 logger.error(f"Error sending feedback request: {e}")
 
