@@ -111,10 +111,10 @@ async def on_command_error(ctx, error):
 
 # Run the bot
 try:
-    bot.run("MTQwMTI2Mjg2OTc1MjA1Nzk2Ng.G-hNH7.mvqOBNpEHtcIBLJOlddxn8PUyV2ei3dTGgagAU")
+    # Start Discord bot
+    bot.run("MTQwMTI2Mjg2OTc1MjA1Nzk2Ng.GF3Re9.mojIFNk7DnKJb7I7J7l8lvfgW_NSW-PkBJyGeU")
 
 except discord.errors.LoginFailure as e:
-
     logger.error(f"Discord login failure: {e}")
 except Exception as e:
     logger.error(f"Bot failed to start: {e}")

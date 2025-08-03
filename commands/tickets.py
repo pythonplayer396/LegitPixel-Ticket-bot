@@ -203,8 +203,28 @@ class PrioritySelectView(discord.ui.View):
                 )
                 return
 
+            # Respond to interaction immediately to prevent timeout
+            await interaction.response.send_message(
+                f"Setting priority to **{priority}** {emoji}...",
+                ephemeral=True
+            )
+
             # Store the priority
             storage.set_ticket_priority(self.ticket_number, priority)
+            
+            # Disable all priority buttons after selection
+            for item in self.children:
+                if isinstance(item, discord.ui.Button):
+                    item.disabled = True
+            
+            # Update the message with disabled buttons
+            try:
+                await interaction.edit_original_response(
+                    content=f"Priority set to **{priority}** {emoji}",
+                    view=self
+                )
+            except Exception as e:
+                logger.error(f"Error updating message with disabled buttons: {e}")
             
             priority_embed = discord.Embed(
                 title=f"{emoji} Priority Set: {priority}",
@@ -247,24 +267,34 @@ class PrioritySelectView(discord.ui.View):
                 
                 # Send notification if channel exists or was created
                 if priority_channel:
-                    notification_embed = discord.Embed(
-                        title=f"{emoji} Priority Alert",
-                        description=f"Ticket #{self.ticket_number} priority selected by {interaction.user.mention}",
-                        color=discord.Color.blue()
-                    )
-                    await priority_channel.send(embed=notification_embed)
+                    # Get the Carriers role
+                    carriers_role = discord.utils.get(interaction.guild.roles, id=1280539104832127008)
+                    carriers_mention = f"<@&1280539104832127008>" if carriers_role else "@Carriers"
+                    
+                    # Create priority-specific message
+                    if priority.lower() == "urgent":
+                        priority_message = f"{carriers_mention} {interaction.user.mention} has set ticket-{self.ticket_number} priority to **{priority}** {emoji}. **URGENT ATTENTION REQUIRED!**"
+                    elif priority.lower() == "high":
+                        priority_message = f"{carriers_mention} {interaction.user.mention} has set ticket-{self.ticket_number} priority to **{priority}** {emoji}. **High priority assistance needed.**"
+                    else:
+                        priority_message = f"{carriers_mention} {interaction.user.mention} has set ticket-{self.ticket_number} priority to **{priority}** {emoji}."
+                    
+                    await priority_channel.send(priority_message)
                     
             except Exception as e:
                 logger.error(f"Error sending priority notification: {e}")
-            
-            await interaction.response.send_message(
-                f"Priority set to **{priority}** {emoji}",
-                ephemeral=True
-            )
 
+        except discord.NotFound:
+            logger.error(f"Interaction expired for priority setting on ticket {self.ticket_number}")
         except Exception as e:
             logger.error(f"Error setting priority: {e}")
-            await interaction.response.send_message("An error occurred while setting priority.", ephemeral=True)
+            try:
+                if not interaction.response.is_done():
+                    await interaction.response.send_message("An error occurred while setting priority.", ephemeral=True)
+                else:
+                    await interaction.followup.send("An error occurred while setting priority.", ephemeral=True)
+            except:
+                pass
 
 class FeedbackModal(discord.ui.Modal):
     def __init__(self, ticket_name: str, guild_id: int):
@@ -569,6 +599,7 @@ class TicketCommands(commands.Cog):
 
             staff_role = discord.utils.get(interaction.guild.roles, name="Staff")
             admin_role = discord.utils.get(interaction.guild.roles, name="Admin")
+            carriers_role = discord.utils.get(interaction.guild.roles, id=1280539104832127008)
 
             overwrites = {
                 interaction.guild.default_role: discord.PermissionOverwrite(read_messages=False),
@@ -580,6 +611,8 @@ class TicketCommands(commands.Cog):
                 overwrites[staff_role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
             if admin_role:
                 overwrites[admin_role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
+            if carriers_role:
+                overwrites[carriers_role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
 
             ticket_channel = await category_channel.create_text_channel(
                 name=channel_name,
@@ -831,13 +864,21 @@ class TicketCommands(commands.Cog):
                 transcript_content += f"Closed at: {interaction.created_at}\n"
                 transcript_content += "=" * 50 + "\n\n"
 
-                # Get messages from channel
+                # Get messages from channel and store for web portal
                 messages = []
+                web_messages = []
                 async for message in interaction.channel.history(limit=None, oldest_first=True):
                     if not message.author.bot or message.embeds:  # Include bot messages with embeds
                         timestamp = message.created_at.strftime("%Y-%m-%d %H:%M:%S")
                         content = message.content or "[Embed/File]"
                         transcript_content += f"[{timestamp}] {message.author.display_name}: {content}\n"
+                        
+                        # Store for web portal
+                        web_messages.append({
+                            "author": message.author.display_name,
+                            "content": content,
+                            "timestamp": timestamp
+                        })
 
                 # Save transcript file
                 transcript_filename = f"transcripts/ticket_{self.ticket_number}.txt"
@@ -846,6 +887,9 @@ class TicketCommands(commands.Cog):
 
                 with open(transcript_filename, "w", encoding="utf-8") as f:
                     f.write(transcript_content)
+
+                # Store web transcript data
+                await self.store_web_transcript(web_messages, closing_reason, interaction)
 
                 # Send transcript to user
                 transcript_embed = discord.Embed(
@@ -896,6 +940,101 @@ class TicketCommands(commands.Cog):
 
             except Exception as e:
                 logger.error(f"Error creating transcript: {e}")
+
+        async def store_web_transcript(self, messages, closing_reason, interaction):
+            """Store transcript data via MongoDB API"""
+            try:
+                import requests
+                from datetime import datetime
+                
+                # Get ticket details from storage
+                ticket_info = storage.tickets.get(self.ticket_number, {})
+                claimed_by = storage.get_ticket_claimed_by(self.ticket_number)
+                
+                transcript_data = {
+                    "ticket_number": self.ticket_number,
+                    "user_id": str(self.user.id),
+                    "category": ticket_info.get('category', 'Unknown'),
+                    "status": "Closed",
+                    "created_at": ticket_info.get('created_at', datetime.utcnow().isoformat()),
+                    "closed_at": datetime.utcnow().isoformat(),
+                    "closed_by": interaction.user.display_name,
+                    "closing_reason": closing_reason,
+                    "messages": messages,
+                    "details": ticket_info.get('details', ''),
+                    "claimed_by": claimed_by
+                }
+                
+                # Send to MongoDB API
+                try:
+                    response = requests.post(
+                        'http://localhost:8000/api/transcripts',
+                        json=transcript_data,
+                        timeout=10
+                    )
+                    
+                    if response.status_code == 201:
+                        logger.info(f"Successfully saved transcript for ticket {self.ticket_number} to MongoDB")
+                    else:
+                        logger.error(f"Failed to save transcript to MongoDB: {response.status_code} - {response.text}")
+                        
+                except requests.exceptions.RequestException as e:
+                    logger.error(f"Error connecting to MongoDB API: {e}")
+                    # Fallback to local storage if API is unavailable
+                    await self.fallback_store_transcript(transcript_data)
+                    
+            except Exception as e:
+                logger.error(f"Error storing web transcript: {e}")
+
+        async def fallback_store_transcript(self, transcript_data):
+            """Fallback method to store transcript locally if API is unavailable"""
+            try:
+                import json
+                import os
+                
+                os.makedirs("data", exist_ok=True)
+                transcript_file = "data/web_transcripts.json"
+                
+                web_transcripts = []
+                if os.path.exists(transcript_file):
+                    with open(transcript_file, 'r') as f:
+                        web_transcripts = json.load(f)
+                
+                # Convert to old format for compatibility
+                fallback_data = {
+                    "number": transcript_data["ticket_number"],
+                    "user_id": transcript_data["user_id"],
+                    "category": transcript_data["category"],
+                    "status": transcript_data["status"],
+                    "created_at": transcript_data["created_at"],
+                    "closed_at": transcript_data["closed_at"],
+                    "closed_by": transcript_data["closed_by"],
+                    "closing_reason": transcript_data["closing_reason"],
+                    "messages": transcript_data["messages"],
+                    "date": transcript_data["closed_at"]
+                }
+                
+                web_transcripts.append(fallback_data)
+                
+                with open(transcript_file, 'w') as f:
+                    json.dump(web_transcripts, f, indent=2)
+                    
+                logger.info(f"Stored transcript as fallback for ticket {transcript_data['ticket_number']}")
+                
+            except Exception as e:
+                logger.error(f"Error in fallback transcript storage: {e}")
+                
+                # Add new transcript
+                web_transcripts.append(web_transcript)
+                
+                # Save updated transcripts
+                with open(transcript_file, 'w') as f:
+                    json.dump(web_transcripts, f, indent=2)
+                
+                logger.info(f"Stored web transcript for ticket {self.ticket_number}")
+                
+            except Exception as e:
+                logger.error(f"Error storing web transcript: {e}")
 
         async def send_feedback_request(self, closer: discord.User):
             try:

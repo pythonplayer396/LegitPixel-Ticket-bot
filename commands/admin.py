@@ -29,7 +29,7 @@ class AdminCommands(commands.Cog):
             logger.error(f"Error setting up defaults: {e}")
 
     @app_commands.command(name="ticket_setup")
-    @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.checks.has_any_role(1336379731330994247)
     async def ticket_setup(self, interaction: discord.Interaction, channel: discord.TextChannel):
         """Set up the ticket system in a specific channel"""
         try:
@@ -143,7 +143,7 @@ class AdminCommands(commands.Cog):
             await interaction.response.send_message("An error occurred while setting up the ticket system.", ephemeral=True)
 
     @app_commands.command(name="sendmsg")
-    @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.checks.has_any_role(1336379731330994247)
     async def send_message(self, interaction: discord.Interaction, channel: discord.TextChannel, message: str):
         """Send a custom message to a channel"""
         try:
@@ -218,6 +218,7 @@ class AdminCommands(commands.Cog):
         floor_or_tier="Floor (f1-f7, m1-m7, entrance) or tier (t2-t4)",
         grade="Grade achieved (s or s+)"
     )
+    @app_commands.checks.has_any_role(1274788617663025182)
     async def carried(
         self,
         interaction: discord.Interaction,
@@ -241,6 +242,7 @@ class AdminCommands(commands.Cog):
 
     @app_commands.command(name="points", description="View total approved points for a staff member")
     @app_commands.describe(staff="The staff member to check points for")
+    @app_commands.checks.has_any_role(1280539104832127008)
     async def points(self, interaction: discord.Interaction, staff: discord.Member):
         """View total points for a staff member"""
         try:
@@ -254,6 +256,7 @@ class AdminCommands(commands.Cog):
             await interaction.response.send_message("An error occurred while retrieving points.", ephemeral=True)
 
     @app_commands.command(name="leaderboard", description="View top staff members by carry points")
+    @app_commands.checks.has_any_role(1280539104832127008)
     async def leaderboard(self, interaction: discord.Interaction):
         """Display carry points leaderboard"""
         try:
@@ -300,7 +303,7 @@ class AdminCommands(commands.Cog):
 
     @app_commands.command(name="add_carrier", description="Replace a carrier and deduct points from original")
     @app_commands.describe(
-        ticket_id="The ticket ID where replacement occurred",
+        ticket_name="The ticket name (e.g., ticket-123)",
         original_carrier="The original carrier who needs replacement",
         reason="Reason for replacement (offline/absence)",
         replacement_staff="The staff member replacing the carrier",
@@ -310,7 +313,7 @@ class AdminCommands(commands.Cog):
     async def add_carrier(
         self,
         interaction: discord.Interaction,
-        ticket_id: str,
+        ticket_name: str,
         original_carrier: discord.Member,
         reason: str,
         replacement_staff: discord.Member,
@@ -349,18 +352,54 @@ class AdminCommands(commands.Cog):
 
             carry_system.save_points(points_data)
 
+            # Find and update the ticket channel
+            ticket_channel = None
+            for channel in interaction.guild.channels:
+                if channel.name == ticket_name or channel.name == f"#{ticket_name}":
+                    ticket_channel = channel
+                    break
+            
+            # Format the replacement message
+            replacement_message = f"{original_carrier.mention} have been replaced by {replacement_staff.mention} in #{ticket_name}"
+            
+            if ticket_channel:
+                # Send replacement message to ticket channel
+                await ticket_channel.send(replacement_message)
+                
+                # Send new staff addition message to ticket channel
+                new_staff_message = f"🔄 **Staff Update**: {replacement_staff.mention} has been added to assist with this ticket."
+                await ticket_channel.send(new_staff_message)
+                
+                # Remove original carrier's permissions from the ticket channel
+                try:
+                    await ticket_channel.set_permissions(original_carrier, read_messages=False, send_messages=False)
+                    logger.info(f"Removed {original_carrier.name} permissions from {ticket_name}")
+                except Exception as e:
+                    logger.error(f"Error removing permissions for {original_carrier.name}: {e}")
+                
+                # Add new staff member permissions to the ticket channel
+                try:
+                    await ticket_channel.set_permissions(replacement_staff, read_messages=True, send_messages=True)
+                    logger.info(f"Added {replacement_staff.name} permissions to {ticket_name}")
+                except Exception as e:
+                    logger.error(f"Error adding permissions for {replacement_staff.name}: {e}")
+
             # Send to carrier replacement log channel
             log_channel_id = 1401473630814081145
             log_channel = interaction.guild.get_channel(log_channel_id)
             
             if log_channel:
+                # Send the replacement message to log channel
+                await log_channel.send(replacement_message)
+                
+                # Also send detailed embed for record keeping
                 log_embed = discord.Embed(
-                    title="🔄 Carrier Replacement",
+                    title="🔄 Carrier Replacement Details",
                     color=discord.Color.orange(),
                     timestamp=discord.utils.utcnow()
                 )
                 
-                log_embed.add_field(name="Ticket ID", value=f"#{ticket_id}", inline=True)
+                log_embed.add_field(name="Ticket", value=f"#{ticket_name}", inline=True)
                 log_embed.add_field(name="Original Carrier", value=original_carrier.mention, inline=True)
                 log_embed.add_field(name="Replacement Carrier", value=replacement_staff.mention, inline=True)
                 log_embed.add_field(name="Reason", value=reason, inline=True)
@@ -377,16 +416,16 @@ class AdminCommands(commands.Cog):
                 title="🔄 Carrier Replacement Processed",
                 color=discord.Color.green()
             )
-            confirmation_embed.add_field(name="Ticket ID", value=f"#{ticket_id}", inline=True)
+            confirmation_embed.add_field(name="Ticket", value=f"#{ticket_name}", inline=True)
             confirmation_embed.add_field(name="Original Carrier", value=original_carrier.mention, inline=True)
             confirmation_embed.add_field(name="Replacement Carrier", value=replacement_staff.mention, inline=True)
             confirmation_embed.add_field(name="Reason", value=reason, inline=True)
             confirmation_embed.add_field(name="Points Deducted", value=str(actual_deducted), inline=True)
             confirmation_embed.add_field(name="New Points", value=str(new_points), inline=True)
 
-            await interaction.response.send_message(embed=confirmation_embed)
+            await interaction.response.send_message(embed=confirmation_embed, ephemeral=True)
 
-            logger.info(f"Carrier replacement processed by {interaction.user.name}: Ticket {ticket_id}, {original_carrier.name} -> {replacement_staff.name}, {actual_deducted} points deducted")
+            logger.info(f"Carrier replacement processed by {interaction.user.name}: Ticket {ticket_name}, {original_carrier.name} -> {replacement_staff.name}, {actual_deducted} points deducted")
 
         except Exception as e:
             logger.error(f"Error in add_carrier command: {e}")
