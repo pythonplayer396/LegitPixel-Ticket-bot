@@ -1,0 +1,124 @@
+embed = discord.Embed(
+    title="Carry Points System Overview",
+    description=(
+        "This chart defines the points rewarded for successful carries. Points vary depending on the type and difficulty of the carry. "
+        "Only completed and manager-approved carries are eligible.\n\n"
+        "**Dungeons** award points based on the floor and grade (S or S+).\n"
+        "**Slayers** award fixed points based on the Slayer boss and Tier.\n\n"
+        "**Normal or failed runs do not earn any points.**"
+    ),
+    color=discord.Color.blue()
+)
+
+# Set images
+embed.set_image(url="https://media.discordapp.net/attachments/1250029348690464820/1401464879352643605/ChatGPT_Image_Aug_3_2025_03_20_28_AM.png?ex=68905f61&is=688f0de1&hm=444a0499ca17f972533970181ed3531eaa300abe27a96562fc135d3ec36ae9a3&=&format=webp&quality=lossless&width=875&height=875")
+embed.set_thumbnail(url="https://media.discordapp.net/attachments/1250029348690464820/1401465507491741799/slayer_carry_points_chart.png?ex=68905ff6&is=688f0e76&hm=35b0d7d6e11cfa1979e9272bcbc8efc63537b8f2429f23f2f25ba5047da5d8a6&=&format=webp&quality=lossless&width=1321&height=661")
+
+# Dungeon Points – Catacombs
+embed.add_field(
+    name="Catacombs – F1 to F7",
+    value=(
+        "```text\n"
+        "Floor │ S Grade │ S+ Grade\n"
+        "──────┼─────────┼──────────\n"
+        " F1   │    2    │     3    \n"
+        " F2   │    3    │     4    \n"
+        " F3   │    4    │     5    \n"
+        " F4   │    5    │     6    \n"
+        " F5   │    6    │     8    \n"
+        " F6   │    8    │    10    \n"
+        " F7   │   10    │    14    \n"
+        "```"
+    ),
+    inline=False
+)
+
+# Dungeon Points – Master Mode
+embed.add_field(
+    name="Master Mode – M1 to M7",
+    value=(
+        "```text\n"
+        "Floor │ S Grade │ S+ Grade\n"
+        "──────┼─────────┼──────────\n"
+        " M1   │    6    │     8    \n"
+        " M2   │    7    │     9    \n"
+        " M3   │    8    │    10    \n"
+        " M4   │    9    │    12    \n"
+        " M5   │   10    │    14    \n"
+        " M6   │   14    │    18    \n"
+        " M7   │   18    │    24    \n"
+        "```"
+    ),
+    inline=False
+)
+
+# Slayer – Revenant, Tarantula, Sven
+embed.add_field(
+    name="Slayer Points I",
+    value=(
+        "**Revenant Horror**\n"
+        "```text\n"
+        "Tier │ Points\n"
+        "─────┼────────\n"
+        " T2  │   2    \n"
+        " T3  │   4    \n"
+        " T4  │   5    \n"
+        " T5  │   7    \n"
+        "```\n"
+        "**Tarantula Broodfather**\n"
+        "```text\n"
+        "Tier │ Points\n"
+        "─────┼────────\n"
+        " T2  │   2    \n"
+        " T3  │   4    \n"
+        " T4  │   5    \n"
+        "```\n"
+        "**Sven Packmaster**\n"
+        "```text\n"
+        "Tier │ Points\n"
+        "─────┼────────\n"
+        " T2  │   3    \n"
+        " T3  │   5    \n"
+        " T4  │   6    \n"
+        "```"
+    ),
+    inline=False
+)
+
+# Slayer – Advanced
+embed.add_field(
+    name="Slayer Points II",
+    value=(
+        "**Voidgloom Seraph**\n"
+        "```text\n"
+        "Tier │ Points\n"
+        "─────┼────────\n"
+        " T1  │   4    \n"
+        " T2  │   6    \n"
+        " T3  │   8    \n"
+        " T4  │  12    \n"
+        "```\n"
+        "**Inferno Demonlord**\n"
+        "```text\n"
+        "Tier │ Points\n"
+        "─────┼────────\n"
+        " T1  │   6    \n"
+        " T2  │  10    \n"
+        " T3  │  16    \n"
+        " T4  │  20    \n"
+        "```\n"
+        "**Riftstalker Bloodfiend**\n"
+        "```text\n"
+        "Tier │ Points\n"
+        "─────┼────────\n"
+        " T1  │   3    \n"
+        " T2  │   6    \n"
+        " T3  │   9    \n"
+        " T4  │  12    \n"
+        "```"
+    ),
+    inline=False
+)
+
+embed.set_footer(text="Copyright by darkwall")
+await interaction.response.send_message(embed=embed)

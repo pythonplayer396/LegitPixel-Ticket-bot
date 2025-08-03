@@ -144,6 +144,7 @@ class CarrySystem(commands.Cog):
         self,
         interaction: discord.Interaction,
         staff: discord.Member,
+        user_carried: discord.Member,
         number_of_runs: int,
         carry_type: str,
         floor_or_tier: str,
@@ -191,6 +192,8 @@ class CarrySystem(commands.Cog):
             pending_data[carry_id] = {
                 "staff_id": str(staff.id),
                 "staff_name": staff.display_name,
+                "user_carried_id": str(user_carried.id),
+                "user_carried_name": user_carried.display_name,
                 "requester_id": str(interaction.user.id),
                 "requester_name": interaction.user.display_name,
                 "runs": number_of_runs,
@@ -208,6 +211,7 @@ class CarrySystem(commands.Cog):
                 color=discord.Color.orange()
             )
             embed.add_field(name="Staff Member", value=staff.mention, inline=True)
+            embed.add_field(name="User Carried", value=user_carried.mention, inline=True)
             embed.add_field(name="Requested by", value=interaction.user.mention, inline=True)
             embed.add_field(name="Number of Runs", value=str(number_of_runs), inline=True)
             embed.add_field(name="Carry Type", value=carry_type.title(), inline=True)
@@ -244,7 +248,12 @@ class CarrySystem(commands.Cog):
                 description=f"{staff.mention} has **{total_points}** total approved points.",
                 color=discord.Color.blue()
             )
-            embed.set_thumbnail(url=staff.display_avatar.url)
+            
+            # Handle avatar URL safely
+            try:
+                embed.set_thumbnail(url=staff.display_avatar.url)
+            except Exception as avatar_error:
+                logger.warning(f"Could not set avatar for {staff.display_name}: {avatar_error}")
 
             await interaction.response.send_message(embed=embed)
 
@@ -276,7 +285,18 @@ class CarrySystem(commands.Cog):
                     if user:
                         medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}."
                         leaderboard_text += f"{medal} {user.display_name}: **{points}** points\n"
-                except:
+                    else:
+                        # Try to fetch user from Discord API if not in cache
+                        try:
+                            user = await self.bot.fetch_user(int(user_id))
+                            medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}."
+                            leaderboard_text += f"{medal} {user.display_name}: **{points}** points\n"
+                        except:
+                            # User not found, show with ID only
+                            medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}."
+                            leaderboard_text += f"{medal} Unknown User ({user_id}): **{points}** points\n"
+                except Exception as e:
+                    logger.error(f"Error processing user {user_id} in leaderboard: {e}")
                     continue
 
             if leaderboard_text:
@@ -308,9 +328,17 @@ class CarrySystem(commands.Cog):
             for carry_id, data in list(pending_data.items())[:10]:  # Show max 10
                 staff_user = self.bot.get_user(int(data["staff_id"]))
                 staff_name = staff_user.display_name if staff_user else data["staff_name"]
+                
+                # Handle user_carried (for backward compatibility with old entries)
+                user_carried_name = "Unknown"
+                if "user_carried_id" in data:
+                    user_carried_user = self.bot.get_user(int(data["user_carried_id"]))
+                    user_carried_name = user_carried_user.display_name if user_carried_user else data.get("user_carried_name", "Unknown")
+                
                 pending_text += (
                     f"**ID:** {carry_id}\n"
                     f"**Staff:** {staff_name}\n"
+                    f"**User Carried:** {user_carried_name}\n"
                     f"**Type:** {data['carry_type'].title()} {data['floor_or_tier'].upper()}\n"
                     f"**Runs:** {data['runs']} | **Grade:** {data['grade'].upper()} | **Points:** {data['points']}\n\n"
                 )
@@ -322,6 +350,125 @@ class CarrySystem(commands.Cog):
         except Exception as e:
             logger.error(f"Error in pending_carries command: {e}")
             await interaction.response.send_message("An error occurred while retrieving pending carries.", ephemeral=True)
+
+    async def remove_points(self, interaction: discord.Interaction, staff: discord.Member, points: int):
+        """Remove points from a staff member"""
+        try:
+            if points <= 0:
+                await interaction.response.send_message("Points to remove must be positive.", ephemeral=True)
+                return
+
+            points_data = self.load_points()
+            staff_id = str(staff.id)
+            current_points = points_data.get(staff_id, 0)
+
+            if current_points == 0:
+                await interaction.response.send_message(f"{staff.display_name} has no points to remove.", ephemeral=True)
+                return
+
+            # Calculate new points (don't go below 0)
+            new_points = max(0, current_points - points)
+            points_removed = current_points - new_points
+
+            # Update points
+            if new_points == 0:
+                # Remove entry if points reach 0
+                if staff_id in points_data:
+                    del points_data[staff_id]
+            else:
+                points_data[staff_id] = new_points
+
+            self.save_points(points_data)
+
+            # Create confirmation embed
+            embed = discord.Embed(
+                title="📉 Points Removed",
+                color=discord.Color.red()
+            )
+            embed.add_field(name="Staff Member", value=staff.mention, inline=True)
+            embed.add_field(name="Points Removed", value=str(points_removed), inline=True)
+            embed.add_field(name="Previous Points", value=str(current_points), inline=True)
+            embed.add_field(name="Current Points", value=str(new_points), inline=True)
+            embed.add_field(name="Removed by", value=interaction.user.mention, inline=True)
+
+            try:
+                embed.set_thumbnail(url=staff.display_avatar.url)
+            except Exception as avatar_error:
+                logger.warning(f"Could not set avatar for {staff.display_name}: {avatar_error}")
+
+            await interaction.response.send_message(embed=embed)
+
+            # Send points log for removal
+            await self.send_points_log_removal(interaction, staff, current_points, new_points, points_removed)
+
+            logger.info(f"Points removed by {interaction.user.name}: {points_removed} points from {staff.name} (was {current_points}, now {new_points})")
+
+        except Exception as e:
+            logger.error(f"Error in remove_points command: {e}")
+            await interaction.response.send_message("An error occurred while removing points.", ephemeral=True)
+
+    async def send_points_log(self, interaction: discord.Interaction, carry_data: dict, previous_points: int, new_points: int, action: str):
+        """Send points change log to the main points log channel"""
+        try:
+            # Get the points log channel
+            points_channel = interaction.guild.get_channel(1401461191028637717)
+            if not points_channel:
+                logger.error("Points log channel not found")
+                return
+
+            # Get staff info
+            staff_user = interaction.guild.get_member(int(carry_data["staff_id"]))
+            staff_name = staff_user.display_name if staff_user else carry_data["staff_name"]
+
+            # Create log embed
+            embed = discord.Embed(
+                title="📊 Points Updated",
+                color=discord.Color.blue(),
+                timestamp=discord.utils.utcnow()
+            )
+            
+            embed.add_field(name="Staff Member", value=f"{staff_name} ({staff_user.mention if staff_user else 'Unknown'})", inline=True)
+            embed.add_field(name="Manager", value=interaction.user.mention, inline=True)
+            embed.add_field(name="Action", value=action.title(), inline=True)
+            embed.add_field(name="Points Change", value=f"+{carry_data['points']}", inline=True)
+            embed.add_field(name="Previous Points", value=str(previous_points), inline=True)
+            embed.add_field(name="New Points", value=str(new_points), inline=True)
+            embed.add_field(name="Carry Details", value=f"{carry_data['carry_type'].title()} {carry_data['floor_or_tier'].upper()} - {carry_data['grade'].upper()} ({carry_data['runs']} runs)", inline=False)
+            embed.set_footer(text=f"Request ID: {self.carry_id}")
+
+            await points_channel.send(embed=embed)
+
+        except Exception as e:
+            logger.error(f"Error sending points log: {e}")
+
+    async def send_points_log_removal(self, interaction: discord.Interaction, staff: discord.Member, previous_points: int, new_points: int, points_removed: int):
+        """Send points removal log to the main points log channel"""
+        try:
+            # Get the points log channel
+            points_channel = interaction.guild.get_channel(1401461191028637717)
+            if not points_channel:
+                logger.error("Points log channel not found")
+                return
+
+            # Create log embed
+            embed = discord.Embed(
+                title="📉 Points Removed",
+                color=discord.Color.red(),
+                timestamp=discord.utils.utcnow()
+            )
+            
+            embed.add_field(name="Staff Member", value=f"{staff.display_name} ({staff.mention})", inline=True)
+            embed.add_field(name="Manager", value=interaction.user.mention, inline=True)
+            embed.add_field(name="Action", value="Removed", inline=True)
+            embed.add_field(name="Points Change", value=f"-{points_removed}", inline=True)
+            embed.add_field(name="Previous Points", value=str(previous_points), inline=True)
+            embed.add_field(name="New Points", value=str(new_points), inline=True)
+            embed.set_footer(text="Manual points removal")
+
+            await points_channel.send(embed=embed)
+
+        except Exception as e:
+            logger.error(f"Error sending points removal log: {e}")
 
 class CarryApprovalView(discord.ui.View):
     def __init__(self, carry_id: str, carry_system: CarrySystem):
@@ -358,43 +505,166 @@ class CarryApprovalView(discord.ui.View):
                 await interaction.response.send_message("You cannot approve your own carry request.", ephemeral=True)
                 return
 
-            # Update embed
-            embed = interaction.message.embeds[0]
-
             if approved:
                 # Add points to staff member
                 points_data = self.carry_system.load_points()
                 staff_id = carry_data["staff_id"]
                 current_points = points_data.get(staff_id, 0)
-                points_data[staff_id] = current_points + carry_data["points"]
+                new_points = current_points + carry_data["points"]
+                points_data[staff_id] = new_points
                 self.carry_system.save_points(points_data)
 
+                # Send general points log
+                await self.send_points_log(interaction, carry_data, current_points, new_points, "added")
+
+                # Send approved log to channel
+                await self.send_approved_log(interaction, carry_data)
+
+                # Update embed
+                embed = interaction.message.embeds[0]
                 embed.color = discord.Color.green()
                 embed.add_field(name="Status", value=f"✅ Approved by {interaction.user.mention}", inline=False)
                 status_message = f"Carry request approved! {carry_data['points']} points added to {carry_data['staff_name']}."
             else:
-                embed.color = discord.Color.red()
-                embed.add_field(name="Status", value=f"❌ Declined by {interaction.user.mention}", inline=False)
-                status_message = "Carry request declined. No points awarded."
+                # Ask for decline reason
+                class DeclineReasonModal(discord.ui.Modal):
+                    def __init__(self, carry_approval_view):
+                        super().__init__(title="Decline Reason")
+                        self.carry_approval_view = carry_approval_view
+                        
+                        self.reason_input = discord.ui.TextInput(
+                            label="Why are you declining this carry request?",
+                            style=discord.TextStyle.paragraph,
+                            placeholder="Enter the reason for declining...",
+                            required=True,
+                            max_length=500
+                        )
+                        self.add_item(self.reason_input)
 
-            # Disable buttons
+                    async def on_submit(self, modal_interaction: discord.Interaction):
+                        reason = self.reason_input.value
+                        
+                        # Send declined log to channel
+                        await self.carry_approval_view.send_declined_log(modal_interaction, carry_data, reason)
+                        
+                        # Update original embed
+                        embed = interaction.message.embeds[0]
+                        embed.color = discord.Color.red()
+                        embed.add_field(name="Status", value=f"❌ Declined by {modal_interaction.user.mention}", inline=False)
+                        embed.add_field(name="Reason", value=reason, inline=False)
+                        
+                        # Disable buttons
+                        for item in self.carry_approval_view.children:
+                            item.disabled = True
+                        
+                        # Remove from pending
+                        del pending_data[self.carry_id]
+                        self.carry_approval_view.carry_system.save_pending(pending_data)
+                        
+                        await interaction.edit_original_response(embed=embed, view=self.carry_approval_view)
+                        await modal_interaction.response.send_message("Carry request declined and logged.", ephemeral=True)
+                        
+                        logger.info(f"Carry request {self.carry_id} declined by {modal_interaction.user.name} - Reason: {reason}")
+
+                modal = DeclineReasonModal(self)
+                await interaction.response.send_modal(modal)
+                return
+
+            # Disable buttons for approved requests
             for item in self.children:
                 item.disabled = True
 
-            # Remove from pending
+            # Remove from pending for approved requests
             del pending_data[self.carry_id]
             self.carry_system.save_pending(pending_data)
 
             await interaction.response.edit_message(embed=embed, view=self)
 
-            # Send follow-up message
+            # Send follow-up message for approved requests
             await interaction.followup.send(status_message, ephemeral=True)
 
-            logger.info(f"Carry request {self.carry_id} {'approved' if approved else 'declined'} by {interaction.user.name}")
+            logger.info(f"Carry request {self.carry_id} approved by {interaction.user.name}")
 
         except Exception as e:
             logger.error(f"Error handling approval: {e}")
             await interaction.response.send_message("An error occurred while processing the approval.", ephemeral=True)
+
+    async def send_approved_log(self, interaction: discord.Interaction, carry_data: dict):
+        """Send approved carry log to the approved channel"""
+        try:
+            # Get the approved log channel
+            approved_channel = interaction.guild.get_channel(1401461706764451890)
+            if not approved_channel:
+                logger.error("Approved log channel not found")
+                return
+
+            # Get staff and manager info
+            staff_user = interaction.guild.get_member(int(carry_data["staff_id"]))
+            staff_name = staff_user.display_name if staff_user else carry_data["staff_name"]
+            
+            user_carried_user = interaction.guild.get_member(int(carry_data["user_carried_id"]))
+            user_carried_name = user_carried_user.display_name if user_carried_user else carry_data["user_carried_name"]
+
+            # Create log embed
+            embed = discord.Embed(
+                title="✅ Carry Approved",
+                color=discord.Color.green(),
+                timestamp=discord.utils.utcnow()
+            )
+            
+            embed.add_field(name="Staff Member", value=f"{staff_name} ({staff_user.mention if staff_user else 'Unknown'})", inline=True)
+            embed.add_field(name="User Carried", value=f"{user_carried_name} ({user_carried_user.mention if user_carried_user else 'Unknown'})", inline=True)
+            embed.add_field(name="Approved by", value=interaction.user.mention, inline=True)
+            embed.add_field(name="Carry Type", value=carry_data["carry_type"].title(), inline=True)
+            embed.add_field(name="Floor/Tier", value=carry_data["floor_or_tier"].upper(), inline=True)
+            embed.add_field(name="Grade", value=carry_data["grade"].upper(), inline=True)
+            embed.add_field(name="Runs", value=str(carry_data["runs"]), inline=True)
+            embed.add_field(name="Points Awarded", value=str(carry_data["points"]), inline=True)
+            embed.set_footer(text=f"Request ID: {self.carry_id}")
+
+            await approved_channel.send(embed=embed)
+
+        except Exception as e:
+            logger.error(f"Error sending approved log: {e}")
+
+    async def send_declined_log(self, interaction: discord.Interaction, carry_data: dict, reason: str):
+        """Send declined carry log to the declined channel"""
+        try:
+            # Get the declined log channel
+            declined_channel = interaction.guild.get_channel(1401461442145681519)
+            if not declined_channel:
+                logger.error("Declined log channel not found")
+                return
+
+            # Get staff and manager info
+            staff_user = interaction.guild.get_member(int(carry_data["staff_id"]))
+            staff_name = staff_user.display_name if staff_user else carry_data["staff_name"]
+            
+            user_carried_user = interaction.guild.get_member(int(carry_data["user_carried_id"]))
+            user_carried_name = user_carried_user.display_name if user_carried_user else carry_data["user_carried_name"]
+
+            # Create log embed
+            embed = discord.Embed(
+                title="❌ Carry Declined",
+                color=discord.Color.red(),
+                timestamp=discord.utils.utcnow()
+            )
+            
+            embed.add_field(name="Staff Member", value=f"{staff_name} ({staff_user.mention if staff_user else 'Unknown'})", inline=True)
+            embed.add_field(name="User Carried", value=f"{user_carried_name} ({user_carried_user.mention if user_carried_user else 'Unknown'})", inline=True)
+            embed.add_field(name="Declined by", value=interaction.user.mention, inline=True)
+            embed.add_field(name="Carry Type", value=carry_data["carry_type"].title(), inline=True)
+            embed.add_field(name="Floor/Tier", value=carry_data["floor_or_tier"].upper(), inline=True)
+            embed.add_field(name="Grade", value=carry_data["grade"].upper(), inline=True)
+            embed.add_field(name="Runs", value=str(carry_data["runs"]), inline=True)
+            embed.add_field(name="Points (Not Awarded)", value=str(carry_data["points"]), inline=True)
+            embed.add_field(name="Decline Reason", value=reason, inline=False)
+            embed.set_footer(text=f"Request ID: {self.carry_id}")
+
+            await declined_channel.send(embed=embed)
+
+        except Exception as e:
+            logger.error(f"Error sending declined log: {e}")
 
 async def setup(bot):
     await bot.add_cog(CarrySystem(bot))

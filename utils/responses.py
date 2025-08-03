@@ -69,7 +69,6 @@ def feedback_embed(ticket_name: str, user: discord.Member, rating: int, feedback
         description += f"### Suggestions\n{suggestions}\n\n"
 
     description += (
-        f"**Support Staff:** {claimed_by or 'Unclaimed'}\n"
         f"**Resolved By:** {closed_by or 'Unknown'}"
     )
 
