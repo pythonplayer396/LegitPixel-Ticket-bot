@@ -864,21 +864,13 @@ class TicketCommands(commands.Cog):
                 transcript_content += f"Closed at: {interaction.created_at}\n"
                 transcript_content += "=" * 50 + "\n\n"
 
-                # Get messages from channel and store for web portal
+                # Get messages from channel
                 messages = []
-                web_messages = []
                 async for message in interaction.channel.history(limit=None, oldest_first=True):
                     if not message.author.bot or message.embeds:  # Include bot messages with embeds
                         timestamp = message.created_at.strftime("%Y-%m-%d %H:%M:%S")
                         content = message.content or "[Embed/File]"
                         transcript_content += f"[{timestamp}] {message.author.display_name}: {content}\n"
-                        
-                        # Store for web portal
-                        web_messages.append({
-                            "author": message.author.display_name,
-                            "content": content,
-                            "timestamp": timestamp
-                        })
 
                 # Save transcript file
                 transcript_filename = f"transcripts/ticket_{self.ticket_number}.txt"
@@ -887,9 +879,6 @@ class TicketCommands(commands.Cog):
 
                 with open(transcript_filename, "w", encoding="utf-8") as f:
                     f.write(transcript_content)
-
-                # Store web transcript data
-                await self.store_web_transcript(web_messages, closing_reason, interaction)
 
                 # Send transcript to user
                 transcript_embed = discord.Embed(
@@ -940,101 +929,6 @@ class TicketCommands(commands.Cog):
 
             except Exception as e:
                 logger.error(f"Error creating transcript: {e}")
-
-        async def store_web_transcript(self, messages, closing_reason, interaction):
-            """Store transcript data via MongoDB API"""
-            try:
-                import requests
-                from datetime import datetime
-                
-                # Get ticket details from storage
-                ticket_info = storage.tickets.get(self.ticket_number, {})
-                claimed_by = storage.get_ticket_claimed_by(self.ticket_number)
-                
-                transcript_data = {
-                    "ticket_number": self.ticket_number,
-                    "user_id": str(self.user.id),
-                    "category": ticket_info.get('category', 'Unknown'),
-                    "status": "Closed",
-                    "created_at": ticket_info.get('created_at', datetime.utcnow().isoformat()),
-                    "closed_at": datetime.utcnow().isoformat(),
-                    "closed_by": interaction.user.display_name,
-                    "closing_reason": closing_reason,
-                    "messages": messages,
-                    "details": ticket_info.get('details', ''),
-                    "claimed_by": claimed_by
-                }
-                
-                # Send to MongoDB API
-                try:
-                    response = requests.post(
-                        'http://localhost:8000/api/transcripts',
-                        json=transcript_data,
-                        timeout=10
-                    )
-                    
-                    if response.status_code == 201:
-                        logger.info(f"Successfully saved transcript for ticket {self.ticket_number} to MongoDB")
-                    else:
-                        logger.error(f"Failed to save transcript to MongoDB: {response.status_code} - {response.text}")
-                        
-                except requests.exceptions.RequestException as e:
-                    logger.error(f"Error connecting to MongoDB API: {e}")
-                    # Fallback to local storage if API is unavailable
-                    await self.fallback_store_transcript(transcript_data)
-                    
-            except Exception as e:
-                logger.error(f"Error storing web transcript: {e}")
-
-        async def fallback_store_transcript(self, transcript_data):
-            """Fallback method to store transcript locally if API is unavailable"""
-            try:
-                import json
-                import os
-                
-                os.makedirs("data", exist_ok=True)
-                transcript_file = "data/web_transcripts.json"
-                
-                web_transcripts = []
-                if os.path.exists(transcript_file):
-                    with open(transcript_file, 'r') as f:
-                        web_transcripts = json.load(f)
-                
-                # Convert to old format for compatibility
-                fallback_data = {
-                    "number": transcript_data["ticket_number"],
-                    "user_id": transcript_data["user_id"],
-                    "category": transcript_data["category"],
-                    "status": transcript_data["status"],
-                    "created_at": transcript_data["created_at"],
-                    "closed_at": transcript_data["closed_at"],
-                    "closed_by": transcript_data["closed_by"],
-                    "closing_reason": transcript_data["closing_reason"],
-                    "messages": transcript_data["messages"],
-                    "date": transcript_data["closed_at"]
-                }
-                
-                web_transcripts.append(fallback_data)
-                
-                with open(transcript_file, 'w') as f:
-                    json.dump(web_transcripts, f, indent=2)
-                    
-                logger.info(f"Stored transcript as fallback for ticket {transcript_data['ticket_number']}")
-                
-            except Exception as e:
-                logger.error(f"Error in fallback transcript storage: {e}")
-                
-                # Add new transcript
-                web_transcripts.append(web_transcript)
-                
-                # Save updated transcripts
-                with open(transcript_file, 'w') as f:
-                    json.dump(web_transcripts, f, indent=2)
-                
-                logger.info(f"Stored web transcript for ticket {self.ticket_number}")
-                
-            except Exception as e:
-                logger.error(f"Error storing web transcript: {e}")
 
         async def send_feedback_request(self, closer: discord.User):
             try:
